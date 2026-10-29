@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.FolderOff
@@ -34,7 +33,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -58,7 +56,6 @@ import com.example.R
 import com.example.data.local.TransferRecordEntity
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.OpticalCyan
-import com.example.ui.theme.QuantumViolet
 import com.example.ui.theme.VerifiedEmerald
 import java.io.File
 import java.text.SimpleDateFormat
@@ -69,7 +66,6 @@ import java.util.Locale
 fun VaultScreen(
     records: List<TransferRecordEntity>,
     onRetransmitViaQr: (TransferRecordEntity) -> Unit,
-    onAnalyzeWithAi: (TransferRecordEntity) -> Unit,
     onRenameRecord: (Long, String) -> Unit,
     onDeleteRecord: (TransferRecordEntity) -> Unit,
     modifier: Modifier = Modifier
@@ -83,7 +79,6 @@ fun VaultScreen(
         when (selectedFilter) {
             "SENT" -> records.filter { it.direction == "SENT" }
             "RECEIVED" -> records.filter { it.direction == "RECEIVED" }
-            "AI" -> records.filter { it.direction == "AI_OPTIMIZED" || !it.aiSummary.isNullOrBlank() }
             else -> records
         }
     }
@@ -104,7 +99,7 @@ fun VaultScreen(
                 style = MaterialTheme.typography.titleLarge
             )
             Text(
-                text = "Tutti i file inviati, ricevuti via fotocamera o estratti con AI salvati sul dispositivo con verifica SHA-256",
+                text = "Tutti i file inviati o ricevuti tramite fotocamera salvati sul dispositivo con verifica SHA-256",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -118,8 +113,7 @@ fun VaultScreen(
                 listOf(
                     "ALL" to "Tutti (${records.size})",
                     "RECEIVED" to "Ricevuti",
-                    "SENT" to "Inviati",
-                    "AI" to "Smart AI"
+                    "SENT" to "Inviati"
                 ).forEach { (key, label) ->
                     FilterChip(
                         selected = selectedFilter == key,
@@ -178,11 +172,10 @@ fun VaultScreen(
                         VaultRecordCard(
                             record = record,
                             onRetransmit = { onRetransmitViaQr(record) },
-                            onAnalyzeAi = { onAnalyzeWithAi(record) },
                             onShareExternal = { shareRecordFileExternally(context, record) },
                             onOpenRename = {
                                 recordBeingRenamed = record
-                                renameText = record.smartSuggestedName ?: record.fileName
+                                renameText = record.fileName
                             },
                             onDelete = { onDeleteRecord(record) }
                         )
@@ -197,20 +190,13 @@ fun VaultScreen(
             onDismissRequest = { recordBeingRenamed = null },
             title = { Text("Rinomina File in Archivio") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = renameText,
-                        onValueChange = { renameText = it },
-                        label = { Text("Nuovo nome file") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    target.smartSuggestedName?.let { suggested ->
-                        TextButton(onClick = { renameText = suggested }) {
-                            Text("Usa suggerimento AI: $suggested")
-                        }
-                    }
-                }
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    label = { Text("Nuovo nome file") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             },
             confirmButton = {
                 Button(
@@ -237,21 +223,16 @@ fun VaultScreen(
 private fun VaultRecordCard(
     record: TransferRecordEntity,
     onRetransmit: () -> Unit,
-    onAnalyzeAi: () -> Unit,
     onShareExternal: () -> Unit,
     onOpenRename: () -> Unit,
     onDelete: () -> Unit
 ) {
     val dateFormat = remember { SimpleDateFormat("dd MMM HH:mm", Locale.getDefault()) }
-    val badgeColor = when (record.direction) {
-        "RECEIVED" -> VerifiedEmerald
-        "AI_OPTIMIZED" -> QuantumViolet
-        else -> OpticalCyan
-    }
-    val badgeLabel = when (record.direction) {
-        "RECEIVED" -> "RICEVUTO VIA FOTOCAMERA"
-        "AI_OPTIMIZED" -> "ESTRATTO & OTTIMIZZATO AI"
-        else -> "INVIATO VIA STREAM QR"
+    val badgeColor = if (record.direction == "RECEIVED") VerifiedEmerald else OpticalCyan
+    val badgeLabel = if (record.direction == "RECEIVED") {
+        "RICEVUTO VIA FOTOCAMERA"
+    } else {
+        "INVIATO VIA STREAM QR"
     }
 
     Card(
@@ -316,12 +297,6 @@ private fun VaultRecordCard(
                         contentDescription = "Rinomina file"
                     )
                 }
-                IconButton(onClick = onShareExternal) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = "Condividi file"
-                    )
-                }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.DeleteOutline,
@@ -331,7 +306,6 @@ private fun VaultRecordCard(
                 }
             }
 
-            // SHA-256 Integrity Line
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -343,35 +317,14 @@ private fun VaultRecordCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = "SHA-256: ${record.sha256Hash.take(20)}…",
+                    text = "SHA-256: ${record.sha256Hash.take(24)}…",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = JetBrainsMonoFontFamily,
                     color = VerifiedEmerald
                 )
             }
 
-            // Optional AI Summary or Extracted Text Snippet
-            record.aiSummary?.takeIf { it.isNotBlank() }?.let { summary ->
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = QuantumViolet.copy(alpha = 0.14f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text(
-                            text = "Riassunto AI (${record.aiCategory ?: "Documento"}):",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = QuantumViolet
-                        )
-                        Text(
-                            text = summary,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            } ?: record.extractedText?.takeIf { it.isNotBlank() }?.let { snippet ->
+            record.textPreview?.takeIf { it.isNotBlank() }?.let { snippet ->
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -388,7 +341,6 @@ private fun VaultRecordCard(
                 }
             }
 
-            // Actions Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -404,13 +356,13 @@ private fun VaultRecordCard(
                 }
 
                 FilledTonalButton(
-                    onClick = onAnalyzeAi,
+                    onClick = onShareExternal,
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Analisi AI")
+                    Text("Condividi")
                 }
             }
         }

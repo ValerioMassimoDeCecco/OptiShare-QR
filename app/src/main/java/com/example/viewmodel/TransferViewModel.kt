@@ -40,7 +40,7 @@ data class SenderUiState(
     val chunkSize: Int = 380,
     val blockSize: Int = 4,
     val eccLevel: QrEccLevel = QrEccLevel.M,
-    val selectedMissingDataIndices: Set<Int> = emptySet(), // Empty = transmit all frames
+    val selectedMissingDataIndices: Set<Int> = emptySet(),
     val statusMessage: String? = null,
     val errorMessage: String? = null
 )
@@ -90,7 +90,6 @@ class TransferViewModel(
             initialValue = emptyList()
         )
 
-    // Internal Receiver Assembly buffers
     private val receivedDataPayloads = mutableMapOf<Int, ByteArray>()
     private val receivedParityPackets = mutableMapOf<Int, OpticalPacket>()
     private val parityRecoveredSet = mutableSetOf<Int>()
@@ -98,34 +97,29 @@ class TransferViewModel(
     private var loopbackJob: Job? = null
 
     init {
-        // Load a default ready-to-transmit sample file on startup so the user can immediately test QR transmission
         loadSampleSpecDocument()
     }
 
     fun loadSampleSpecDocument() {
         val sampleText = """
             ==========================================================
-            OPTISHARE QR — PROTOCOLLO OTTICO CRITTOGRAFICO OFFLINE
+            OPTISHARE QR — PROTOCOLLO OTTICO FOSS (F-DROID READY)
             ==========================================================
-            Data Generazione: 29 Ottobre 2026
-            Modalità: Trasmissione Multi-Frame QR (Air-Gapped Offline)
+            Modalità: Trasmissione Multi-Frame QR (100% Air-Gapped Offline)
+            Licenza & Dipendenze: Stack 100% Open Source (Apache 2.0)
+            Permessi di Rete: NESSUNO (Zero Anti-Feature)
             
-            1. ARCHITETTURA DI TRASFERIMENTO
+            1. ARCHITETTURA DI TRASFERIMENTO OTTICO
             - Compressione binaria GZIP pre-trasmissione.
             - Suddivisione in pacchetti indicizzati con controllo CRC32 su ogni singolo QR.
             - Correzione Errori Forward (FEC) tramite blocchi di Parità XOR: se la fotocamera
               perde un frame in un blocco, il pacchetto viene ricostruito matematicamente
               senza bisogno di attendere un intero ciclo di ripetizione.
             - Verifica finale con impronta crittografica SHA-256 sull'intero file ricostruito.
-            
-            2. INTEGRAZIONE GEMINI 4 ARGON (HIGH THINKING)
-            - Estrazione testo OCR ad alta precisione da foto e documenti.
-            - Riassunto esecutivo strutturato e punti chiave.
-            - Rinomina intelligente automatica basata sul contenuto semantico.
         """.trimIndent()
 
         prepareStreamFromBytes(
-            fileName = "Specifica_Protocollo_OptiShare.txt",
+            fileName = "Specifica_OptiShare_FOSS.txt",
             mimeType = "text/plain",
             rawBytes = sampleText.toByteArray(Charsets.UTF_8),
             saveToVaultAsSent = false
@@ -149,11 +143,9 @@ class TransferViewModel(
                     val raw = contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: throw IllegalArgumentException("Impossibile leggere il file selezionato")
 
-                    // Keep QR payload responsive (cap or downscale huge images if > 120KB for smooth optical transfer)
                     Triple(displayName, resolvedMime, raw)
                 }
 
-                // If the user selected a very large file (> 35 KB), warn or optimize if image, still allowing transfer
                 val processedBytes = if (bytes.size > 35_000) {
                     bytes.copyOfRange(0, 35_000)
                 } else {
@@ -387,10 +379,6 @@ class TransferViewModel(
         }.ifEmpty { stream.allOrderedPackets.indices.toList() }
     }
 
-    // =========================================================================
-    // RECEIVER ENGINE (CameraX Frame Decoding + XOR Parity Recovery + SHA-256)
-    // =========================================================================
-
     fun resetReceiverSession() {
         loopbackJob?.cancel()
         receivedDataPayloads.clear()
@@ -401,7 +389,6 @@ class TransferViewModel(
     }
 
     fun onQrStringScanned(rawQrString: String): Boolean {
-        // Ignore if transfer already completed for current session
         val currentState = _receiverState.value
         val decodeResult = OpticalPacketProtocol.decodePacketFromQrString(rawQrString)
         if (decodeResult.isFailure) {
@@ -419,7 +406,6 @@ class TransferViewModel(
             return false
         }
 
-        // If a brand new session ID is detected, initialize session state
         if (currentState.activeSessionId != packet.sessionId) {
             receivedDataPayloads.clear()
             receivedParityPackets.clear()
@@ -464,7 +450,6 @@ class TransferViewModel(
 
         if (!newlyAdded) return false
 
-        // Attempt XOR parity recovery across all blocks for which we have a parity packet
         for ((blockIdx, parityPkt) in receivedParityPackets) {
             val recovered = OpticalPacketProtocol.tryRecoverMissingChunkInBlock(
                 blockIndex = blockIdx,
@@ -564,11 +549,6 @@ class TransferViewModel(
         }
     }
 
-    /**
-     * Runs a realistic optical loopback test using the actual QR Bitmaps generated in Sender mode,
-     * decoding each bitmap with ZXing (`QrCodecEngine.decodeFromBitmap`) and intentionally dropping
-     * one data frame per block to demonstrate live XOR Forward Error Correction recovery!
-     */
     fun startOpticalLoopbackSimulation(simulateFrameDrops: Boolean = true) {
         val senderBitmaps = _senderState.value.qrBitmaps
         val stream = _senderState.value.stream
@@ -587,7 +567,6 @@ class TransferViewModel(
                 if (_receiverState.value.completedResult != null) break
                 val pkt = stream.allOrderedPackets.getOrNull(idx)
 
-                // Simulate 1 dropped data frame in the first block so the user sees XOR Parity healing in action
                 if (simulateFrameDrops && pkt != null && pkt.kind == PacketKind.DATA && pkt.index == 1 && pkt.totalDataChunks >= 3) {
                     delay(140L)
                     _receiverState.update {

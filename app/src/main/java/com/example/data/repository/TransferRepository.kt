@@ -24,12 +24,7 @@ class TransferRepository(
         parityChunks: Int,
         sha256Hash: String,
         integrityVerified: Boolean,
-        direction: String,
-        extractedText: String? = null,
-        aiSummary: String? = null,
-        smartSuggestedName: String? = null,
-        aiCategory: String? = null,
-        aiKeyPointsJson: String? = null
+        direction: String
     ): TransferRecordEntity = withContext(Dispatchers.IO) {
         val transfersDir = File(context.filesDir, "transfers").apply {
             if (!exists()) mkdirs()
@@ -38,7 +33,7 @@ class TransferRepository(
         val targetFile = File(transfersDir, "${System.currentTimeMillis()}_$safeName")
         targetFile.writeBytes(rawBytes)
 
-        val textPreview = extractedText ?: if (
+        val textPreview = if (
             mimeType.startsWith("text/") ||
             safeName.endsWith(".txt", true) ||
             safeName.endsWith(".md", true) ||
@@ -51,7 +46,6 @@ class TransferRepository(
         val entity = TransferRecordEntity(
             sessionId = sessionId,
             fileName = fileName,
-            smartSuggestedName = smartSuggestedName,
             mimeType = mimeType,
             fileSizeBytes = rawBytes.size.toLong(),
             compressedSizeBytes = compressedSizeBytes,
@@ -61,40 +55,10 @@ class TransferRepository(
             integrityVerified = integrityVerified,
             direction = direction,
             localFilePath = targetFile.absolutePath,
-            extractedText = textPreview,
-            aiSummary = aiSummary,
-            aiCategory = aiCategory,
-            aiKeyPointsJson = aiKeyPointsJson
+            textPreview = textPreview
         )
         val id = transferDao.insertRecord(entity)
         entity.copy(id = id)
-    }
-
-    suspend fun updateRecordWithAiInsights(
-        recordId: Long,
-        suggestedName: String,
-        applyRenameImmediately: Boolean,
-        category: String,
-        summary: String,
-        extractedText: String,
-        keyPointsJson: String
-    ) = withContext(Dispatchers.IO) {
-        val current = transferDao.getRecordById(recordId) ?: return@withContext
-        val updatedFileName = if (applyRenameImmediately && suggestedName.isNotBlank()) {
-            suggestedName
-        } else {
-            current.fileName
-        }
-        transferDao.updateRecord(
-            current.copy(
-                fileName = updatedFileName,
-                smartSuggestedName = suggestedName,
-                aiCategory = category,
-                aiSummary = summary,
-                extractedText = extractedText.ifBlank { current.extractedText },
-                aiKeyPointsJson = keyPointsJson
-            )
-        )
     }
 
     suspend fun renameRecord(recordId: Long, newFileName: String) = withContext(Dispatchers.IO) {

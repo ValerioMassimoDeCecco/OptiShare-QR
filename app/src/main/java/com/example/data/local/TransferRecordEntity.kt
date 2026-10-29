@@ -8,7 +8,6 @@ data class TransferRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val sessionId: String,
     val fileName: String,
-    val smartSuggestedName: String? = null,
     val mimeType: String,
     val fileSizeBytes: Long,
     val compressedSizeBytes: Long,
@@ -16,11 +15,8 @@ data class TransferRecordEntity(
     val parityChunks: Int,
     val sha256Hash: String,
     val integrityVerified: Boolean,
-    val direction: String, // "SENT", "RECEIVED", "AI_OPTIMIZED"
+    val direction: String, // "SENT", "RECEIVED"
     val localFilePath: String,
-    val extractedText: String? = null,
-    val aiSummary: String? = null,
-    val aiCategory: String? = null,
-    val aiKeyPointsJson: String? = null,
+    val textPreview: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )

@@ -1,131 +1,88 @@
-# OptiShare QR — Condivisione File Ottica via Fotocamera & AI
+# OptiShare QR — Migrazione 100% F-Droid Ready (FOSS & Air-Gapped)
 
-**OptiShare QR** è un'applicazione Android progettata per trasferire file completamente offline da un dispositivo all'altro attraverso un flusso ottico di **codici QR dinamici (Multi-Frame Fountain QR)** generati sullo schermo del mittente e catturati in tempo reale dalla fotocamera del destinatario, arricchita da un motore di **intelligenza artificiale avanzata (Gemini 4 Argon con High Thinking)** per estrazione testo, riassunto, compressione semantica e rinomina intelligente dei file.
+Questo piano aggiorna **OptiShare QR** per renderla **100% conforme agli standard F-Droid (Free and Open Source Software)**, rimuovendo ogni SDK, plugin e file di configurazione proprietario Google/Firebase, eliminando il permesso `INTERNET` e concentrando l'esperienza utente esclusivamente sul trasferimento ottico QR offline e sull'Archivio locale.
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Riepilogo delle scelte confermate e dell'architettura tecnica progettata per garantire trasferimenti ottici affidabili al 100% e zero perdita di dati.
+> Riepilogo delle scelte confermate per garantire la piena conformità F-Droid e l'assenza totale di Anti-Feature.
 
-- **Decisione Confermata 1 — Protocollo Ottico QR Dinamico Full-Offline**: I file selezionati o acquisiti vengono compressi (GZIP), suddivisi in pacchetti indicizzati e codificati in una sequenza ciclica di codici QR ad alto contrasto. Ogni frame include checksum **CRC32** del singolo pacchetto, **SHA-256** dell'intero file e **pacchetti di parità XOR (Forward Error Correction)** per ricostruire automaticamente i frame persi senza bisogno di connessione internet, Bluetooth o Wi-Fi.
-- **Decisione Confermata 2 — Estrazione Testo, Riassunto e Rinomina Smart con AI (High Thinking)**: Integrazione con **Firebase AI Logic** utilizzando il modello `gemini-4-argon` configurato con `ThinkingLevel.HIGH` per analizzare foto, documenti e file, estrarre il testo (OCR), generare un riassunto strutturato, suggerire nomi file semantici e offrire una modalità **"Compressione Smart AI"** che riduce drasticamente il peso dei documenti fotografati prima dell'invio via QR.
-- **Decisione Confermata 3 — Archivio Locale Veloce e Offline**: Tutti i file inviati, ricevuti e analizzati vengono salvati nella memoria locale dell'app con metadati indicizzati in **Room Database** (hash SHA-256, stato verifica integrità, testo estratto, riassunto AI e cronologia trasferimenti).
+- **Decisione Confermata 1 — Rimozione Totale Dipendenze Proprietarie Google/Firebase**: Rimozione dei plugin Gradle `com.google.gms.google-services` e `secrets-gradle-plugin`, delle librerie `firebase-bom`, `firebase-ai`, `firebase-appcheck-*` e dei file di configurazione `google-services.json` e `firebase_applet_config.xml`. Tutte le librerie rimanenti (AndroidX Jetpack Compose, CameraX, Room Database, ZXing Core) sono **100% Open Source (Apache 2.0)** e compilabili da sorgente su F-Droid.
+- **Decisione Confermata 2 — Rimozione Scheda Analisi AI**: Eliminazione della scheda `AI Studio` e dei relativi componenti, mantenendo una navigazione essenziale e veloce a 3 schede: **Invia QR**, **Ricevi** e **Archivio**.
+- **Decisione Confermata 3 — Zero Permessi di Rete (`INTERNET` Rimosso) & Zero Blocchi Metadati Proprietari**: Rimozione di `<uses-permission android:name="android.permission.INTERNET" />` da `AndroidManifest.xml` e disattivazione di `dependenciesInfo` sia per APK che per Bundle (`includeInApk = false`, `includeInBundle = false`), requisito fondamentale dello scanner F-Droid (`fdroidserver`) per evitare il flag di blocco binario proprietario Google.
 
 ---
 
 ## 1. Overview & Core Concept
 
 - **Cosa Fa**:
-  1. **Trasmettitore Ottico (Invia File)**: L'utente seleziona un file dal dispositivo (o scatta una foto/documento) e l'app genera uno stream fluido di codici QR dinamici con velocità (FPS), dimensione pacchetto e livello di correzione errori regolabili, oltre al filtro rapido per ritrasmettere solo specifici pacchetti mancanti.
-  2. **Ricevitore Fotocamera (Ricevi File)**: L'altro utente inquadra lo schermo con la fotocamera (**CameraX** + decodifica QR ad alta velocità 100% offline). Un'interfaccia HUD mostra in tempo reale la matrice dei pacchetti ricevuti, i pacchetti recuperati tramite parità XOR, la velocità di trasferimento, la barra di avanzamento e la verifica crittografica finale SHA-256.
-  3. **AI Studio Documentale (OCR, Riassunto & Smart Rename)**: Analisi approfondita con `gemini-4-argon` (`ThinkingLevel.HIGH`) per estrarre testo da immagini o file, riassumere documenti complessi e rinominare automaticamente i file prima o dopo il trasferimento.
-  4. **Simulatore Loopback Integrato**: Permette di testare e verificare l'intero flusso di codifica/decodifica QR multi-frame e recupero errori anche su un singolo dispositivo o emulatore.
-- **Target Audience**: Utenti che necessitano di scambiare documenti, note, immagini compresse, chiavi o file in ambienti completamente isolati dalla rete (air-gapped / full offline) con verifica matematica dell'integrità.
-- **Valore Chiave**: Condivisione "punta e inquadra" istantanea, immune da problemi di accoppiamento Bluetooth/Wi-Fi Direct, con garanzia di integrità crittografica e intelligenza documentale.
+  1. **Invia QR (Trasmettitore Ottico)**: Seleziona qualsiasi file dal dispositivo, scatta una foto o crea una nota di testo, comprime i dati con **GZIP**, genera pacchetti con checksum **CRC32**, **SHA-256** e blocchi di **Parità XOR (FEC)** e li riproduce come sequenza di codici QR dinamici ad alto contrasto.
+  2. **Ricevi (Scanner Fotocamera CameraX + ZXing)**: Inquadra il flusso QR dinamico, ricostruisce automaticamente i pacchetti persi tramite Parità XOR, mostra la matrice di integrità in tempo reale e verifica l'impronta **SHA-256** finale.
+  3. **Archivio (Room Database Locale)**: Conserva localmente la cronologia dei file inviati e ricevuti con possibilità di ritrasmetterli via QR, rinominarli, condividerli con altre app tramite `FileProvider` o eliminarli.
+- **Valore Chiave F-Droid**: Un'app di condivisione file realmente *air-gapped* che per architettura e permessi di sistema (`AndroidManifest.xml` privo di `INTERNET`) garantisce matematicamente che nessun byte possa mai uscire dal dispositivo tramite rete.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Flussi Utente Principali
-1. **Flusso Invio (Trasmettitore QR Dinamico)**:
-   - Selezione file tramite File Picker di sistema, acquisizione fotocamera o creazione rapida di nota/testo.
-   - Analisi preliminare del file: calcolo automatico dimensione originale vs compressa (GZIP), impronta SHA-256, numero di pacchetti dati + pacchetti di parità XOR.
-   - Schermata di riproduzione QR ad alta visibilità (cornice bianca ad alto contrasto per massimizzare la lettura ottica anche in condizioni di luce difficili):
-     - Controlli in tempo reale per **Frequenza Frame (1–12 FPS)**, **Dimensione Chunk** e **Livello ECC QR (L / M / Q / H)**.
-     - Selettore interattivo **"Ritrasmetti Pacchetti Specifici"**: consente di toccare i numeri dei pacchetti eventualmente mancanti sul ricevitore per trasmettere solo quelli in loop rapido.
-2. **Flusso Ricezione (Scanner Fotocamera con HUD in Tempo Reale)**:
-   - Apertura mirino **CameraX** con guida ottica di allineamento e feedback aptico al rilevamento di ogni nuovo frame QR.
-   - **Matrice di Integrità Live**: griglia visiva in cui ogni cella rappresenta un pacchetto del file (`In attesa`, `Ricevuto e Verificato CRC32`, `Recuperato via Parità XOR`, `Errore CRC scartato`).
-   - Avanzamento percentuale, contatore pacchetti (`es. 18/20`), bitrate stimato e ricostruzione automatica non appena tutti i pacchetti (o `N-1` per blocco grazie alla parità) sono disponibili.
-   - Verifica finale **SHA-256** con badge di conferma ("Integrità Verificata al 100%") e salvataggio automatico nell'archivio locale.
-3. **Flusso AI Smart Studio**:
-   - Dal dettaglio di qualsiasi file inviato/ricevuto o dalla scheda dedicata **AI Studio**, l'utente avvia l'analisi con `gemini-4-argon` (`ThinkingLevel.HIGH`).
-   - L'AI restituisce in formato strutturato: **Nome File Consigliato** (applicabile con un tocco), **Categoria**, **Riassunto Esecutivo**, **Punti Chiave** e **Testo Completo Estratto (OCR)**, con opzione per generare subito un QR Stream ultraleggero del testo estratto.
-
-### Identità Visiva & Tema
-- **Direzione Estetica**: *Precision Optical Instrument (Tactical High-Contrast Dark & Daylight Studio)* — ispirato alle interfacce degli strumenti ottici professionali e degli scanner telemetrici.
-- **Palette Colori (Material 3 Semantic Tokens)**:
-  - **Sfondo & Superfici**: `Background` `#0B0F17` (Deep Obsidian) e `SurfaceContainer` `#151C28` (Slate Navy) in modalità scura; `#F6F8FC` e `#FFFFFF` in modalità chiara.
-  - **Accento Primario**: `#00E5FF` (Optical Cyan) per il mirino laser, indicatori di scansione attiva e controlli principali.
-  - **Accento Secondario / Parità**: `#7C4DFF` (Quantum Violet) per l'elaborazione AI High-Thinking e i blocchi di recupero parità FEC.
-  - **Conferma Integrità**: `#00E676` (Verified Emerald) per checksum CRC32/SHA-256 validati; `#FF5252` (Signal Coral) per pacchetti corrotti scartati.
-- **Tipografia & Gerarchia (Font Locali Bundle in `res/font/`)**:
-  - **Display & Titoli (`Space Grotesk`)**: Geometrico e tecnico per intestazioni, contatori di progresso e badge di stato.
-  - **Corpo Testo (`Plus Jakarta Sans`)**: Massima leggibilità per riassunti AI, testo estratto e controlli UI.
-  - **Dati Tecnici & Hash (`JetBrains Mono`)**: Monospazio per impronte SHA-256, CRC32, indici pacchetto e telemetria FPS.
+### Flusso di Navigazione Semplificato (3 Schede)
+1. **Invia QR**: Selezione file/foto/nota, calibrazione FPS (1–12 FPS), dimensione pacchetto (240B / 380B / 550B), livello ECC QR (L/M/Q/H) e filtro interattivo per ritrasmettere solo specifici pacchetti mancanti.
+2. **Ricevi**: Mirino ottico CameraX con decodifica ZXing, griglia di stato dei pacchetti (`In attesa`, `Ricevuto CRC32`, `Recuperato via Parità XOR`), simulatore di loopback integrato e accesso diretto all'Archivio a fine ricezione.
+3. **Archivio**: Filtri rapidi (`Tutti`, `Ricevuti`, `Inviati`), badge crittografico SHA-256, rinomina file, condivisione esterna e ritrasmissione QR.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decisione 1: Codifica e Decodifica QR 100% Offline + Forward Error Correction (FEC)**
-  - *Approccio Scelto*: Utilizzo di un motore di codifica/decodifica QR interamente on-device abbinato a un protocollo custom a pacchetti (`QBF1`) con compressione GZIP, checksum CRC32 per singolo frame, hash SHA-256 globale e **pacchetti di parità XOR** (1 pacchetto di parità ogni blocco di $K$ pacchetti dati).
-  - *Perché*: Durante la scansione ad alta velocità tramite fotocamera, un singolo riflesso o battito di ciglia può far perdere un frame. Grazie ai pacchetti di parità XOR e alla ripetizione ciclica (Fountain Loop), il ricevitore ricostruisce il file senza errori al primo giro completo o recupera istantaneamente un frame mancante senza dover attendere l'intero ciclo.
-- **Decisione 2: Compressione Pre-Trasferimento & Modalità Testo/Immagine Ottimizzata**
-  - *Approccio Scelto*: Compressione automatica GZIP dei byte del file e ridimensionamento opzionale intelligente per le immagini pesanti, più estrazione OCR AI per inviare il contenuto testuale in pochi QR code.
-  - *Perché*: I codici QR hanno una capacità fisica limitata (~500–1200 byte per frame per mantenere una lettura rapida da fotocamera). Ottimizzare il payload garantisce trasferimenti fluidi e privi di errori di messa a fuoco.
-- **Decisione 3: Persistenza Locale Room Database + File System Interno**
-  - *Approccio Scelto*: I file ricostruiti vengono salvati nella directory sicura dell'app (`context.filesDir/transfers`) e indicizzati in **Room Database** con flussi reattivi `StateFlow`.
-  - *Perché*: Garantisce accesso istantaneo 100% offline, verifica storica degli hash SHA-256 e possibilità di condividere o ri-trasmettere qualsiasi file ricevuto in qualsiasi momento.
+- **Decisione 1: Conformità Reproducible Builds & F-Droid Scanner**
+  - *Approccio Scelto*: Rimozione del plugin `google-services`, rimozione del blocco `GEMINI_API_KEY` e impostazione di `dependenciesInfo { includeInApk = false; includeInBundle = false }`.
+  - *Perché*: Il compilatore Android (AGP) inserisce di default un blocco binario cifrato con la chiave pubblica di Google (`DEPENDENCY_INFO_BLOCK`). Disattivandolo e rimuovendo tutte le librerie `com.google.firebase` / `com.google.android.gms`, l'APK supera i controlli automatici di `fdroid lint` e `fdroid scanner`.
+- **Decisione 2: Stack 100% Apache 2.0**
+  - *Approccio Scelto*: Mantenimento esclusivo di `androidx.*` (Jetpack Compose, CameraX, Room, Lifecycle), `org.jetbrains.kotlinx.*` e `com.google.zxing:core` (libreria pura Java open-source Apache 2.0 senza alcuna dipendenza da Google Play Services).
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
-### Architettura di Sistema & Componenti
+### Architettura di Sistema F-Droid Ready
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        UI LAYER (Jetpack Compose M3)                        │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────┐  ┌──────────┐  │
-│  │  SendQrScreen    │  │ ReceiveScanScreen│  │ AiStudioScr │  │ VaultScr │  │
-│  │ (Dynamic QR Gen, │  │ (CameraX HUD,    │  │ (OCR, Smart │  │ (Room DB │  │
-│  │  FPS/ECC/Filter) │  │  Chunk Matrix)   │  │  Rename/Sum)│  │  History)│  │
-│  └────────┬─────────┘  └────────┬─────────┘  └──────┬──────┘  └────┬─────┘  │
-└───────────┼─────────────────────┼───────────────────┼──────────────┼────────┘
-            │                     │                   │              │
-            ▼                     ▼                   ▼              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     VIEWMODEL & STATE LAYER (StateFlow)                     │
-│  ┌────────────────────────────────────┐  ┌───────────────────────────────┐  │
-│  │       TransferViewModel            │  │        AiStudioViewModel      │  │
-│  │ (Sender Stream, Receiver Assembly, │  │ (Firebase AI gemini-4-argon,  │  │
-│  │  Loopback Simulator, Vault State)  │  │  ThinkingLevel.HIGH, Schema)  │  │
-│  └────────┬───────────────────┬───────┘  └───────────────┬───────────────┘  │
-└───────────┼───────────────────┼──────────────────────────┼──────────────────┘
-            │                   │                          │
-            ▼                   ▼                          ▼
-┌──────────────────────┐ ┌────────────────────────┐ ┌─────────────────────────┐
-│ OpticalQrProtocol    │ │ TransferRepository     │ │ Firebase AI Logic SDK   │
-│ • GZIP Compression   │ │ • Room TransferDao     │ │ • AppCheck Configured   │
-│ • CRC32 & SHA-256    │ │ • Local File Storage   │ │ • gemini-4-argon        │
-│ • XOR Parity (FEC)   │ │ • Integrity Validator  │ │ • ThinkingLevel.HIGH    │
-│ • QR Bitmap Codec    │ └────────────────────────┘ └─────────────────────────┘
-└──────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                   UI LAYER (Jetpack Compose M3)                      │
+│  ┌─────────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
+│  │    SendQrScreen     │  │  ReceiveScanScreen  │  │ VaultScreen  │  │
+│  │ (Dynamic QR Stream, │  │ (CameraX + ZXing,   │  │ (Local Room  │  │
+│  │  FPS/ECC/Filter)    │  │  XOR Matrix, SHA256)│  │  DB History) │  │
+│  └──────────┬──────────┘  └──────────┬──────────┘  └──────┬───────┘  │
+└─────────────┼────────────────────────┼────────────────────┼──────────┘
+              │                        │                    │
+              ▼                        ▼                    ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                  VIEWMODEL & STATE LAYER (StateFlow)                 │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                       TransferViewModel                        │  │
+│  │   (Sender Stream, Receiver Assembly, Loopback, Vault State)    │  │
+│  └──────────────────┬─────────────────────────────┬───────────────┘  │
+└─────────────────────┼─────────────────────────────┼──────────────────┘
+                      │                             │
+                      ▼                             ▼
+      ┌──────────────────────────────┐ ┌──────────────────────────┐
+      │     OpticalPacketProtocol    │ │    TransferRepository    │
+      │ • GZIP Compression           │ │ • Room TransferDao       │
+      │ • CRC32 & SHA-256            │ │ • Internal File Storage  │
+      │ • XOR Parity (FEC)           │ │ • FileProvider Sharing   │
+      │ • ZXing Pure-Java QR Codec   │ └──────────────────────────┘
+      └──────────────────────────────┘
 ```
 
-### Protocollo Pacchetti Ottici (`OpticalPacketProtocol`)
-Ogni codice QR del flusso codifica una stringa strutturata compatta:
-```
-QBF1|<sessionId>|<packetType:D/P>|<index>|<totalData>|<blockSize>|<crc32Hex>|<sha256Prefix>|<fileName>|<mimeType>|<base64Payload>
-```
-- `packetType`: `D` (Data Chunk) oppure `P` (Parity XOR Chunk calcolato su un gruppo di $K$ pacchetti dati).
-- `crc32Hex`: Checksum a 32 bit calcolato sui byte del singolo pacchetto per scartare immediatamente letture ottiche parziali o corrotte.
-- `sha256Prefix` + Header Metadata: Permette al ricevitore di agganciarsi al flusso a partire da **qualsiasi** frame (anche se inizia a inquadrare a metà trasmissione) e verificare l'hash SHA-256 finale del file riassemblato.
-
-### Mappatura Componenti Interattivi & Gestione Stato
-- **`SendQrScreen` (Trasmettitore)**:
-  - Selezione file tramite `ActivityResultContracts.GetContent()` / `TakePicturePreview()` o creazione nota rapida.
-  - Generazione asincrona dei pacchetti e rendering fluido con `LaunchedEffect(isPlaying, fps, selectedChunkFilter)` che cicla i bitmap QR.
-  - Controlli interattivi per FPS (1–12 FPS), dimensione pacchetto (250B / 450B / 700B), livello ECC e filtro per ritrasmettere specifici pacchetti mancanti.
-- **`ReceiveScanScreen` (Ricevitore CameraX)**:
-  - Gestione permesso `Manifest.permission.CAMERA` tramite `ActivityResultContracts.RequestPermission()`.
-  - Analisi frame `CameraX ImageAnalysis` (`STRATEGY_KEEP_ONLY_LATEST`) con decodifica ZXing multi-orientamento e inversione luminanza per schermi scuri/chiari.
-  - Aggiornamento reattivo della griglia dei pacchetti, calcolo recupero parità XOR quando manca un solo pacchetto in un blocco, verifica SHA-256 finale e salvataggio automatico.
-  - Modalità **Simulazione Loopback** integrata per testare l'intero flusso di ricezione e ricostruzione errori direttamente sull'emulatore.
-- **`AiStudioScreen` & Dialoghi Smart (`gemini-4-argon` + `ThinkingLevel.HIGH`)**:
-  - Configurazione `Firebase.ai.generativeModel` con `modelName = "gemini-4-argon"`, `thinkingConfig = thinkingConfig { thinkingLevel = ThinkingLevel.HIGH }` e `responseSchema = Schema.obj(...)`.
-  - Funzionalità **Analizza File / Foto**: estrae il testo completo, genera un riassunto strutturato, elenca i punti chiave e propone un nome file semantico applicabile con un tap nel database Room.
+### Modifiche Tecniche Previste
+- **Configurazione Gradle & Version Catalog**:
+  - Rimozione dei plugin `secrets` e `google.services` e di tutte le dipendenze `firebase-*`, `credentials`, `googleid`, `play-services-*`, `retrofit`, `okhttp`, `moshi` inutilizzate.
+  - Disattivazione completa di `dependenciesInfo` in `app/build.gradle.kts`.
+- **Pulizia Risorse & Sorgenti Proprietari**:
+  - Eliminazione di `google-services.json`, `firebase_applet_config.xml`, `AppCheckConfig.kt`, `AiStudioViewModel.kt` e `AiStudioScreen.kt`.
+- **AndroidManifest.xml**:
+  - Rimozione del permesso `android.permission.INTERNET`.
+  - Mantenimento dei soli permessi `CAMERA` (con `android:required="false"`) e `VIBRATE`.

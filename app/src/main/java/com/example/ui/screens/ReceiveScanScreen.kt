@@ -8,12 +8,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
@@ -39,16 +42,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -104,7 +106,7 @@ fun ReceiveScanScreen(
     onQrScanned: (String) -> Boolean,
     onResetSession: () -> Unit,
     onStartLoopbackSimulation: () -> Unit,
-    onAnalyzeCompletedWithAi: (TransferRecordEntity) -> Unit,
+    onRetransmitCompletedRecord: (TransferRecordEntity) -> Unit,
     onOpenVault: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -188,7 +190,7 @@ fun ReceiveScanScreen(
                                 tint = OpticalCyan
                             )
                             Text(
-                                text = "Ricevitore Ottico CameraX",
+                                text = "Ricevitore Ottico CameraX (Offline)",
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
@@ -226,7 +228,6 @@ fun ReceiveScanScreen(
                                 }
                             )
 
-                            // Tactical Optical Reticle Overlay
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val boxSize = size.minDimension * 0.68f
                                 val left = (size.width - boxSize) / 2f
@@ -246,7 +247,6 @@ fun ReceiveScanScreen(
                                 )
                             }
 
-                            // Bottom live packet pill inside viewfinder
                             Surface(
                                 color = Color.Black.copy(alpha = 0.72f),
                                 shape = RoundedCornerShape(50),
@@ -301,7 +301,6 @@ fun ReceiveScanScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Loopback Simulator & Single Image Import Buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -392,7 +391,6 @@ fun ReceiveScanScreen(
                         color = if (receiverState.completedResult != null) VerifiedEmerald else OpticalCyan
                     )
 
-                    // Telemetry Counters Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -419,7 +417,6 @@ fun ReceiveScanScreen(
                         )
                     }
 
-                    // Live Chunk Matrix Grid
                     if (receiverState.totalDataChunks > 0) {
                         Text(
                             text = "Matrice Integrità Pacchetti (Verde = Diretto CRC32, Viola = Ricostruito via Parità XOR):",
@@ -460,7 +457,6 @@ fun ReceiveScanScreen(
                             }
                         }
 
-                        // Missing chunk callout so user can tell sender which chunks to filter if needed
                         val missing = receiverState.missingDataChunkIndices
                         if (missing.isNotEmpty() && missing.size <= 5) {
                             Text(
@@ -551,32 +547,28 @@ fun ReceiveScanScreen(
                             ) {
                                 receiverState.savedRecord?.let { record ->
                                     Button(
-                                        onClick = { onAnalyzeCompletedWithAi(record) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = QuantumViolet,
-                                            contentColor = Color.White
-                                        ),
+                                        onClick = { onRetransmitCompletedRecord(record) },
                                         modifier = Modifier
                                             .weight(1f)
-                                            .testTag("analyze_received_ai_button"),
+                                            .testTag("retransmit_received_qr_button"),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Estrai & Riassumi AI")
+                                        Text("Ritrasmetti QR")
                                     }
                                 }
 
                                 OutlinedButton(
                                     onClick = onOpenVault,
                                     modifier = Modifier
-                                        .weight(0.8f)
+                                        .weight(1f)
                                         .testTag("open_vault_after_receive_button"),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Icon(Icons.Default.FolderSpecial, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Archivio")
+                                    Text("Apri in Archivio")
                                 }
                             }
                         }
@@ -596,7 +588,13 @@ private fun onQrStringScannedSafe(
 
 private fun triggerHapticTick(context: Context) {
     runCatching {
-        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            manager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
         if (vibrator != null && vibrator.hasVibrator()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 vibrator.vibrate(VibrationEffect.createOneShot(25L, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -612,7 +610,6 @@ private fun triggerHapticTick(context: Context) {
 private fun CameraXQrScannerPreview(
     onQrStringDecoded: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
 
@@ -634,8 +631,17 @@ private fun CameraXQrScannerPreview(
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(1280, 720),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                            )
+                        )
+                        .build()
+
                     val imageAnalysis = ImageAnalysis.Builder()
-                        .setTargetResolution(Size(1280, 720))
+                        .setResolutionSelector(resolutionSelector)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
 

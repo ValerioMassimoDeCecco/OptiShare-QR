@@ -2,17 +2,19 @@
 
 Questa procedura riguarda il **catalogo ufficiale di F-Droid**, non un repository
 F-Droid gestito in proprio. La presenza dei metadati in questo progetto non
-significa che l'app sia stata inviata, approvata o pubblicata.
+significa che l'app sia stata approvata o pubblicata. Una richiesta è stata
+aperta: [F-Droid RFP #4700](https://gitlab.com/fdroid/rfp/-/work_items/4700).
 
 ## Stato e decisioni necessarie
 
-- Il repository GitHub è privato: F-Droid deve poter scaricare pubblicamente
-  il codice sorgente completo e aggiornato. Il proprietario deve decidere se
-  renderlo pubblico oppure pubblicare un repository sorgente pubblico equivalente.
+- Il repository GitHub è pubblico e contiene il codice sorgente. Il repository
+  è stato creato il 29 ottobre 2026; la [politica di inclusione](https://f-droid.org/docs/Inclusion_Policy/)
+  richiede normalmente almeno tre mesi di sviluppo attivo, con alcune eccezioni
+  (per esempio utenti dimostrabili). Verificare se esistono prove di sviluppo
+  precedente o se si applica un'eccezione, e comunicarlo ai revisori.
 - È stata aggiunta una licenza MIT per il codice originale (`LICENSE`), secondo
   la scelta del proprietario. Prima della distribuzione, i titolari dei diritti
-  devono verificare che sia applicabile a tutti i contributi originali. La
-  licenza e gli altri cambiamenti devono essere integrati nella versione pubblica.
+  devono verificare che sia applicabile a tutti i contributi originali.
 - I font in `app/src/main/res/font/` indicano la licenza SIL OFL; i testi di
   licenza upstream e le attribuzioni sono in `licenses/fonts/`. Verificarne le
   versioni e possibili modifiche, oltre a provenienza e licenze delle altre
@@ -38,10 +40,12 @@ significa che l'app sia stata inviata, approvata o pubblicata.
 2. Completare i metadati in `fastlane/metadata/android/`: sono disponibili
    titolo e descrizioni in italiano e inglese. Aggiungere un'icona adatta,
    screenshot reali e note di rilascio in `changelogs/<versionCode>.txt`.
-3. Controllare che l'app non sia già presente nel catalogo o nella coda delle
-   richieste. Presentare una richiesta di pacchettizzazione oppure una merge
-   request a `fdroiddata` su GitLab con i metadati di build, indicando repository
-   pubblico, licenza, versione, `versionCode` e commit/tag verificato.
+3. La [richiesta RFP #4700](https://gitlab.com/fdroid/rfp/-/work_items/4700)
+   è stata aperta. Verificare eventuali duplicati nel catalogo e nella coda,
+   completare la checklist richiesta e seguire le risposte dei manutentori. La
+   [bozza originale](FDROID-RFP.md) è conservata come riferimento: non aprire
+   una seconda richiesta. In alternativa si può proporre una merge request a
+   `fdroiddata` con i metadati di build verificati.
 4. Rispondere all'eventuale revisione dei manutentori. L'inclusione e la
    pubblicazione dipendono dall'approvazione e dalla build di F-Droid.
 

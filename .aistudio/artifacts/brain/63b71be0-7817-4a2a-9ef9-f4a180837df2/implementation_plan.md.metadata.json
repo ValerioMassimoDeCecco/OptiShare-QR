@@ -1,0 +1,6 @@
+{
+  "summary":  "Piano di implementazione completo per OptiShare QR: app Android per il trasferimento file offline tramite sequenze di codici QR dinamici ad alta frequenza con verifica di integrità (CRC32/SHA-256) e recupero errori (FEC/Parity), scanner CameraX in tempo reale, analisi AI avanzata (estrazione testo OCR, riassunto e rinomina intelligente con Gemini 4 Argon High Thinking) e archivio locale Room Database.",
+  "updatedAt":  "2026-10-29T08:05:30.174901930Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

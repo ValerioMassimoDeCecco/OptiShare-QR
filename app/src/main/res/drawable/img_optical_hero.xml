@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="320dp"
+    android:height="160dp"
+    android:viewportWidth="320"
+    android:viewportHeight="160">
+    <!-- Background Gradient -->
+    <path android:pathData="M0,0h320v160h-320z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="320"
+                android:endY="160"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#0D1422" />
+                <item android:offset="0.5" android:color="#162138" />
+                <item android:offset="1.0" android:color="#0B101B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Grid Lines -->
+    <path
+        android:strokeColor="#1F00E5FF"
+        android:strokeWidth="1"
+        android:pathData="M0,40h320M0,80h320M0,120h320M64,0v160M128,0v160M192,0v160M256,0v160" />
+    <!-- Sender Device Frame -->
+    <path
+        android:fillColor="#1A263D"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:pathData="M34,28h64v104h-64z" />
+    <!-- QR Matrix on Sender -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M44,44h16v16h-16zM72,44h16v16h-16zM44,72h16v16h-16zM64,64h8v8h-8zM76,72h12v16h-12zM44,96h44v8h-44z" />
+    <!-- Optical Stream Packets in Transit -->
+    <path
+        android:fillColor="#447C4DFF"
+        android:strokeColor="#7C4DFF"
+        android:strokeWidth="1.5"
+        android:pathData="M118,48h28v28h-28zM152,66h28v28h-28zM186,44h28v28h-28z" />
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M104,78h114v4h-114z" />
+    <!-- Receiver Device Camera Reticle -->
+    <path
+        android:fillColor="#1A263D"
+        android:strokeColor="#00E676"
+        android:strokeWidth="2"
+        android:pathData="M222,28h64v104h-64z" />
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M236,52h36v36h-36z" />
+    <path
+        android:fillColor="#0D1422"
+        android:pathData="M242,58h24v24h-24z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M248,64h12v12h-12zM236,98h36v6h-36zM236,108h24v6h-24z" />
+</vector>

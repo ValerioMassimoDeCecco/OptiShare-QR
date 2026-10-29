@@ -1,0 +1,10 @@
+{
+  "name": "OptiShare QR",
+  "description": "Condivisione file offline tramite sequenze di codici QR dinamici con verifica di integrità CRC32/SHA-256, correzione errori XOR e analisi AI avanzata.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

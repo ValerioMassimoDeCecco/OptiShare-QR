@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">OptiShare QR</string>
+    <string name="nav_send">Invia QR</string>
+    <string name="nav_receive">Ricevi</string>
+    <string name="nav_ai_studio">AI Studio</string>
+    <string name="nav_vault">Archivio</string>
+    <string name="hero_title">Trasmissione Ottica Full-Offline</string>
+    <string name="hero_subtitle">Flusso QR dinamico con parità XOR, CRC32 e SHA-256</string>
+    <string name="pick_file_button">Scegli File dal Dispositivo</string>
+    <string name="capture_photo_button">Scatta Foto / Documento</string>
+    <string name="create_text_note_button">Crea Nota / Testo Rapido</string>
+    <string name="load_sample_button">File Demo Pronto</string>
+    <string name="camera_permission_title">Permesso Fotocamera Richiesto</string>
+    <string name="camera_permission_rationale">Per ricevere i file inquadrando i codici QR dinamici è necessario consentire l\'accesso alla fotocamera.</string>
+    <string name="grant_camera_button">Attiva Fotocamera</string>
+    <string name="simulate_loopback_button">Simula Ricezione Ottica (Test Loopback)</string>
+    <string name="ai_analyze_button">Analizza con Gemini 4 Argon (High Thinking)</string>
+    <string name="apply_smart_rename">Applica Rinomina Smart</string>
+    <string name="send_extracted_via_qr">Invia Testo Estratto via QR</string>
+    <string name="vault_empty_title">Nessun trasferimento in archivio</string>
+    <string name="vault_empty_subtitle">I file inviati, ricevuti via fotocamera o ottimizzati con AI appariranno qui con verifica SHA-256.</string>
+</resources>

@@ -45,3 +45,46 @@ other dependencies still require review. The app author requested submission.
 Non dichiarare verificati conformità, assenza di duplicati, compilazione o test
 su dispositivi finché non sono stati effettivamente controllati. L'accettazione
 è soggetta alla revisione dei manutentori F-Droid.
+
+---
+
+## Aggiornamento da pubblicare come commento sulla richiesta #4700
+
+Testo pronto, in inglese, da aggiungere come commento alla
+[richiesta già aperta](https://gitlab.com/fdroid/rfp/-/work_items/4700), dopo
+aver aggiornato l'eventuale commit e aver verificato la build in CI. Le parti
+tra parentesi quadre vanno confermate o cancellate.
+
+```text
+Update from upstream:
+
+* The Gradle wrapper is now complete: gradlew, gradlew.bat and
+  gradle/wrapper/gradle-wrapper.jar, taken from the official Gradle 9.3.1
+  distribution. gradle/wrapper/gradle-wrapper.properties pins 9.3.1 with its
+  distributionSha256Sum, which matches the hash published in F-Droid's
+  gradle-transparency-log, so gradlew-fdroid can build with it.
+* The release build type no longer requires the AI Studio keystore: when the
+  keystore or its passwords are missing the release APK is left unsigned
+  (app-release-unsigned.apk), which is what F-Droid needs to sign the APK
+  itself. This was checked against remove_signing_keys in fdroidserver, which
+  strips signingConfigs from app/build.gradle.kts: the resulting file is still
+  valid and balanced.
+* Source snapshot: tagged release v1.0 (versionName 1.0, versionCode 1).
+* Fastlane metadata for en-US and it now includes the changelog for
+  versionCode 1.
+* Proposed build metadata: docs/fdroiddata/com.aistudio.optishareqr.xkvpzr.yml
+  (subdir: app, gradle: yes, commit: v1.0). No scanignore is needed:
+  fdroidserver's scanner explicitly allows gradle/wrapper/gradle-wrapper.jar,
+  gradlew and gradlew.bat.
+* GitHub Actions runs ./gradlew assembleRelease on every push and publishes the
+  unsigned APK as an artifact, so the build result is public.
+
+Still open, and not yet verified:
+* [no build has been run locally: no JDK, Android SDK or Maven access in the
+  author's environment, so the first verification is the CI run]
+* [the app is untested on real devices]
+* [screenshots and a dedicated icon are missing from the Fastlane metadata]
+* [the repository is younger than the three months of active development
+  required by the inclusion policy]
+* [font provenance and the other bundled assets still need review]
+```

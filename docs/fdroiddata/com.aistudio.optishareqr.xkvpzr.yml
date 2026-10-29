@@ -1,0 +1,48 @@
+# Proposed build metadata for the official F-Droid catalogue.
+# Destination: metadata/com.aistudio.optishareqr.xkvpzr.yml in fdroiddata
+# (https://gitlab.com/fdroid/fdroiddata).
+#
+# `fdroid rewritemeta` strips the comments and reorders the fields, so the
+# version that lands in fdroiddata will not contain these explanations.
+# The same content can be attached to RFP #4700 or proposed directly with a
+# merge request to fdroiddata.
+
+Categories:
+  - Connectivity
+
+License: MIT
+
+AuthorName: Valerio Massimo De Cecco
+AuthorWebSite: https://github.com/ValerioMassimoDeCecco
+
+SourceCode: https://github.com/ValerioMassimoDeCecco/OptiShare-QR
+IssueTracker: https://github.com/ValerioMassimoDeCecco/OptiShare-QR/issues
+Changelog: https://github.com/ValerioMassimoDeCecco/OptiShare-QR/releases
+
+RepoType: git
+Repo: https://github.com/ValerioMassimoDeCecco/OptiShare-QR.git
+
+AutoName: OptiShare QR
+
+Builds:
+  - versionName: '1.0'
+    versionCode: 1
+    commit: v1.0
+    subdir: app
+    gradle:
+      - yes
+    # No `output:` needed: the release build type has no signing config when the
+    # AI Studio keystore is absent, so AGP writes
+    # app/build/outputs/apk/release/app-release-unsigned.apk, which matches the
+    # first glob fdroidserver tries ('*-release-unsigned.apk') in that directory.
+    # No `scanignore:` needed: fdroidserver's scanner explicitly allows
+    # gradle/wrapper/gradle-wrapper.jar, gradlew and gradlew.bat.
+
+MaintainerNotes: |-
+    The Gradle version is pinned by gradle/wrapper/gradle-wrapper.properties
+    (Gradle 9.3.1, with the SHA-256 of the distribution, which matches the one
+    published in F-Droid's gradle-transparency-log). F-Droid builds with
+    gradlew-fdroid and that pin, and deletes gradlew/gradlew.bat before building.
+    The release APK is unsigned and therefore signed by F-Droid: builds
+    distributed elsewhere (for example APKMirror) carry the upstream key, so
+    switching between those and the F-Droid build requires reinstalling the app.

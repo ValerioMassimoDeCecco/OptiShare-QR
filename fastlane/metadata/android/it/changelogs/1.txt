@@ -1,0 +1,4 @@
+* Prima versione.
+* Invia un file, una nota di testo o una foto come sequenza di codici QR.
+* Compressione GZIP, controlli CRC32 sui pacchetti, verifica SHA-256 e pacchetti di parità XOR.
+* Archivio locale, con esportazione e condivisione dei file ricevuti.

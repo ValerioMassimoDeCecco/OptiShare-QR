@@ -18,21 +18,38 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  // The AI Studio signing material is used only when it is actually available: a
+  // build without keystore or passwords then produces an unsigned release APK,
+  // which is what distributors that sign APKs with their own key need (F-Droid,
+  // for example, compiles from source and signs the result itself).
+  val aiStudioKeystore = System.getenv("KEYSTORE_PATH")?.let { file(it) }
+    ?: file("${rootDir}/my-upload-key.jks")
+  val aiStudioStorePassword = System.getenv("STORE_PASSWORD")
+  val aiStudioKeyPassword = System.getenv("KEY_PASSWORD")
+  val hasReleaseSigning = aiStudioKeystore.exists() &&
+    !aiStudioStorePassword.isNullOrEmpty() &&
+    !aiStudioKeyPassword.isNullOrEmpty()
+  val debugKeystore = file("${rootDir}/debug.keystore")
+  val hasDebugSigning = debugKeystore.exists()
+
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
   // and updating Android apps in AI Studio.
   signingConfigs {
-    create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+    if (hasReleaseSigning) {
+      create("release") {
+        storeFile = aiStudioKeystore
+        storePassword = aiStudioStorePassword
+        keyAlias = "upload"
+        keyPassword = aiStudioKeyPassword
+      }
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+    if (hasDebugSigning) {
+      create("debugConfig") {
+        storeFile = debugKeystore
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
   }
 
@@ -42,13 +59,18 @@ android {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
-      // AI Studio.
-      signingConfig = signingConfigs.getByName("release")
+      // AI Studio. It is skipped when the AI Studio keystore is not available, so that the
+      // release APK stays unsigned and can be signed by whoever builds it.
+      if (hasReleaseSigning) {
+        signingConfig = signingConfigs.getByName("release")
+      }
     }
     debug {
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
-      // AI Studio.
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // AI Studio. Without the debug keystore, Gradle falls back to the default one.
+      if (hasDebugSigning) {
+        signingConfig = signingConfigs.getByName("debugConfig")
+      }
     }
   }
   compileOptions {

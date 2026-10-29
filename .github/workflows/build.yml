@@ -1,0 +1,42 @@
+name: Android build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assemble-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up the JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # AGP 9.x needs a recent JDK: raise this version if the Android Gradle
+          # Plugin requires it.
+          java-version: "21"
+          cache: gradle
+
+      - name: Assemble the release APK
+        # No keystore is configured in CI, so the release build stays unsigned
+        # (app-release-unsigned.apk). That is also what F-Droid needs, and it
+        # makes the CI output comparable with the APK built by F-Droid.
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: List the APK
+        run: ls -l app/build/outputs/apk/release/
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-unsigned
+          path: app/build/outputs/apk/release/*.apk

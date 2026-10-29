@@ -1,0 +1,4 @@
+* First release.
+* Send a file, a text note or a photo as a sequence of QR codes.
+* GZIP compression, CRC32 packet checks, SHA-256 verification and XOR parity packets.
+* Local archive, with export and sharing of the received files.

@@ -26,6 +26,9 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       # Debug APKs are signed automatically by AGP and can be installed without
       # configuring release signing secrets. Release APKs stay unsigned when no
       # keystore is provided, matching F-Droid's reproducible source build.

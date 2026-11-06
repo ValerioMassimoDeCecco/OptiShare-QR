@@ -1,0 +1,4 @@
+* Version 1.02.
+* New "120 Hz display smoothness" option: uses high refresh rate displays (ProMotion/LTPO) and syncs the QR stream to VSync.
+* Spring-based animations and animated tab transitions for progress bars and UI components.
+* Optimised recomposition with immutable models: a smoother, snappier interface.

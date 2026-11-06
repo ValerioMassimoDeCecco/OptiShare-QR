@@ -73,7 +73,8 @@ fun SettingsScreen(
     onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit,
     onApplyPreset: (String) -> Unit,
     onResetDefaults: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeRefreshRateHz: Int = 120
 ) {
     val colorScheme = MaterialTheme.colorScheme
     var showResetConfirmation by remember { mutableStateOf(false) }
@@ -94,7 +95,10 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. Live Interactive Preview Card
-            LiveDesignBenchPreviewCard(customization = customization)
+            LiveDesignBenchPreviewCard(
+                customization = customization,
+                activeRefreshRateHz = activeRefreshRateHz
+            )
 
             if (isWideLayout) {
                 Row(
@@ -189,7 +193,8 @@ fun SettingsScreen(
 
 @Composable
 private fun LiveDesignBenchPreviewCard(
-    customization: AppCustomizationState
+    customization: AppCustomizationState,
+    activeRefreshRateHz: Int = 120
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isGlass = customization.designStyle == DesignStyle.LIQUID_GLASS
@@ -251,12 +256,9 @@ private fun LiveDesignBenchPreviewCard(
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryMetricCell(
-                    label = if (isGlass) "OPACITÀ ACRILICO" else "BORDO TECNICO",
-                    value = if (isGlass) {
-                        "${(customization.glassOpacity * 100).roundToInt()}%"
-                    } else {
-                        String.format(Locale.US, "%.1f dp", customization.materialBorderWidthDp)
-                    },
+                    label = "FREQUENZA DISPLAY",
+                    value = "${activeRefreshRateHz} Hz VSync",
+                    valueColor = colorScheme.tertiary,
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryMetricCell(
@@ -406,6 +408,34 @@ private fun DesignEngineSelectorPanel(
                         Text(label, style = MaterialTheme.typography.labelSmall)
                     }
                 }
+            }
+
+            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Fluidità Schermo 120Hz (High Refresh Rate)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Richiede la modalità hardware 120Hz / ProMotion e sincronizza il flusso QR al VSync (8.33 ms)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = customization.preferHighRefreshRate,
+                    onCheckedChange = { enabled ->
+                        onUpdateCustomization { it.copy(preferHighRefreshRate = enabled) }
+                    },
+                    modifier = Modifier.testTag("switch_high_refresh_rate_120hz")
+                )
             }
         }
     }

@@ -1,8 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout. defaultMinSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,9 +31,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -84,7 +87,7 @@ fun OptiShareCard(
     } else {
         custom.materialCornerRadiusDp.dp
     }
-    val shape = RoundedCornerShape(radiusDp)
+    val shape = remember(radiusDp) { RoundedCornerShape(radiusDp) }
 
     val containerColor = when {
         custom.designStyle == DesignStyle.LIQUID_GLASS -> {
@@ -176,7 +179,7 @@ fun SectionHeaderRow(
 
 /**
  * Material 3 Segmented Selector Bar with moderate rounded corners (12dp),
- * accessible touch height (40dp), and tonal secondaryContainer selection highlight.
+ * accessible touch height (40dp), and 120Hz spring-animated tonal selection highlight.
  */
 @Composable
 fun <T> SegmentedSelectorBar(
@@ -187,8 +190,8 @@ fun <T> SegmentedSelectorBar(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val outerShape = RoundedCornerShape(12.dp)
-    val itemShape = RoundedCornerShape(9.dp)
+    val outerShape = remember { RoundedCornerShape(12.dp) }
+    val itemShape = remember { RoundedCornerShape(9.dp) }
 
     Surface(
         shape = outerShape,
@@ -204,11 +207,21 @@ fun <T> SegmentedSelectorBar(
         ) {
             items.forEach { item ->
                 val isSelected = item == selectedItem
+                val bgColor by animateColorAsState(
+                    targetValue = if (isSelected) colorScheme.secondaryContainer else Color.Transparent,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "SegmentedBg120Hz"
+                )
+                val fgColor by animateColorAsState(
+                    targetValue = if (isSelected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "SegmentedFg120Hz"
+                )
                 Surface(
                     onClick = { onItemSelected(item) },
                     shape = itemShape,
-                    color = if (isSelected) colorScheme.secondaryContainer else Color.Transparent,
-                    contentColor = if (isSelected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                    color = bgColor,
+                    contentColor = fgColor,
                     tonalElevation = if (isSelected) 2.dp else 0.dp,
                     modifier = Modifier
                         .weight(1f)

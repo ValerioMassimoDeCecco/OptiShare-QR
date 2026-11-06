@@ -26,6 +26,7 @@ android {
     ?: file("${rootDir}/my-upload-key.jks")
   val aiStudioStorePassword = System.getenv("STORE_PASSWORD")
   val aiStudioKeyPassword = System.getenv("KEY_PASSWORD")
+  val aiStudioKeyAlias = System.getenv("KEY_ALIAS") ?: "upload"
   val hasReleaseSigning = aiStudioKeystore.exists() &&
     !aiStudioStorePassword.isNullOrEmpty() &&
     !aiStudioKeyPassword.isNullOrEmpty()
@@ -39,7 +40,7 @@ android {
       create("release") {
         storeFile = aiStudioKeystore
         storePassword = aiStudioStorePassword
-        keyAlias = "upload"
+        keyAlias = aiStudioKeyAlias
         keyPassword = aiStudioKeyPassword
       }
     }

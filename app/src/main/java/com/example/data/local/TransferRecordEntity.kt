@@ -1,8 +1,10 @@
 package com.example.data.local
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+@Immutable
 @Entity(tableName = "transfer_records")
 data class TransferRecordEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

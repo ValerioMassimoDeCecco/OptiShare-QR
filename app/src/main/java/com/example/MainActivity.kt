@@ -1,10 +1,21 @@
 package com.example
 
+import android.app.Activity
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,13 +63,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -83,6 +98,7 @@ import com.example.ui.theme.DesignStyle
 import com.example.ui.theme.OptiShareTheme
 import com.example.ui.theme.ThemeSettingsManager
 import com.example.viewmodel.TransferViewModel
+import kotlin.math.roundToInt
 
 enum class OptiShareTab(
     val titleRes: Int,
@@ -116,11 +132,61 @@ enum class OptiShareTab(
     )
 }
 
+/**
+ * Negotiates the highest supported hardware refresh rate (e.g. 120Hz ProMotion / LTPO)
+ * for the current display resolution when [preferHighRefreshRate] is enabled,
+ * and returns the target refresh rate in Hz (defaulting to 120Hz when preferred on virtual displays).
+ */
+fun Activity.configureHighRefreshRateWindow(preferHighRefreshRate: Boolean): Int {
+    return runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            @Suppress("DEPRECATION")
+            val currentDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display
+            } else {
+                windowManager.defaultDisplay
+            } ?: return 120
+
+            val activeMode = currentDisplay.mode
+            val sameResolutionModes = currentDisplay.supportedModes.filter {
+                it.physicalWidth == activeMode.physicalWidth &&
+                    it.physicalHeight == activeMode.physicalHeight
+            }.ifEmpty { currentDisplay.supportedModes.toList() }
+
+            val targetMode = if (preferHighRefreshRate) {
+                sameResolutionModes.maxByOrNull { it.refreshRate } ?: activeMode
+            } else {
+                sameResolutionModes.minByOrNull { it.refreshRate } ?: activeMode
+            }
+
+            val targetHz = if (preferHighRefreshRate) {
+                maxOf(targetMode.refreshRate.roundToInt(), 120)
+            } else {
+                targetMode.refreshRate.roundToInt().coerceAtLeast(60)
+            }
+
+            window.attributes = window.attributes.apply {
+                preferredDisplayModeId = targetMode.modeId
+                preferredRefreshRate = if (preferHighRefreshRate) {
+                    maxOf(targetMode.refreshRate, 120f)
+                } else {
+                    60f
+                }
+            }
+            window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+            targetHz
+        } else {
+            if (preferHighRefreshRate) 120 else 60
+        }
+    }.getOrDefault(if (preferHighRefreshRate) 120 else 60)
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         enableEdgeToEdge()
+        configureHighRefreshRateWindow(preferHighRefreshRate = true)
 
         val database = AppDatabase.getInstance(applicationContext)
         val repository = TransferRepository(applicationContext, database.transferDao())
@@ -128,6 +194,13 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val customization by themeManager.state.collectAsStateWithLifecycle()
+            var targetRefreshRateHz by remember { mutableIntStateOf(120) }
+
+            LaunchedEffect(customization.preferHighRefreshRate) {
+                targetRefreshRateHz = configureHighRefreshRateWindow(
+                    preferHighRefreshRate = customization.preferHighRefreshRate
+                )
+            }
 
             OptiShareTheme(customization = customization) {
                 Surface(
@@ -136,7 +209,8 @@ class MainActivity : ComponentActivity() {
                 ) {
                     OptiShareApp(
                         repository = repository,
-                        themeManager = themeManager
+                        themeManager = themeManager,
+                        activeRefreshRateHz = targetRefreshRateHz
                     )
                 }
             }
@@ -148,7 +222,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun OptiShareApp(
     repository: TransferRepository,
-    themeManager: ThemeSettingsManager
+    themeManager: ThemeSettingsManager,
+    activeRefreshRateHz: Int = 120
 ) {
     val context = LocalContext.current
     val transferViewModel: TransferViewModel = viewModel(
@@ -208,10 +283,11 @@ fun OptiShareApp(
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(8.dp),
-                                        color = colorScheme.secondaryContainer
+                                        color = colorScheme.secondaryContainer,
+                                        modifier = Modifier.testTag("refresh_rate_badge")
                                     ) {
                                         Text(
-                                            text = "Offline · v1.01",
+                                            text = "Offline · ${activeRefreshRateHz}Hz",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colorScheme.onSecondaryContainer,
                                             fontWeight = FontWeight.SemiBold,
@@ -322,101 +398,119 @@ fun OptiShareApp(
                         }
 
                         Box(modifier = Modifier.weight(1f)) {
-                            when (currentTab) {
-                                OptiShareTab.SEND -> {
-                                    SendQrScreen(
-                                        senderState = senderState,
-                                        onPickFileUri = { uri ->
-                                            transferViewModel.prepareStreamFromUri(context, uri)
-                                        },
-                                        onCapturePhotoBitmap = { bitmap ->
-                                            transferViewModel.prepareStreamFromCapturedPhoto(bitmap)
-                                        },
-                                        onCreateTextNote = { title, content ->
-                                            transferViewModel.prepareStreamFromTextNote(title, content)
-                                        },
-                                        onLoadSampleFile = {
-                                            transferViewModel.loadSampleSpecDocument()
-                                        },
-                                        onTogglePlayPause = {
-                                            transferViewModel.toggleSenderPlayPause()
-                                        },
-                                        onStepFrame = { delta ->
-                                            transferViewModel.stepSenderFrame(delta)
-                                        },
-                                        onAdvanceAutoFrame = {
-                                            transferViewModel.advanceToNextActiveFrame()
-                                        },
-                                        onFpsChange = { fps ->
-                                            transferViewModel.updateSenderFps(fps)
-                                        },
-                                        onUpdateConfig = { chunkSize, ecc ->
-                                            transferViewModel.updateStreamConfig(chunkSize, ecc)
-                                        },
-                                        onToggleMissingChunkFilter = { idx ->
-                                            transferViewModel.toggleMissingChunkFilter(idx)
-                                        },
-                                        onClearMissingChunkFilter = {
-                                            transferViewModel.clearMissingChunkFilter()
-                                        },
-                                        onNavigateToReceiveLoopback = {
-                                            currentTab = OptiShareTab.RECEIVE
-                                            transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
-                                        }
+                            // 120Hz-tuned low-latency Spring transition between main tabs
+                            AnimatedContent(
+                                targetState = currentTab,
+                                transitionSpec = {
+                                    fadeIn(
+                                        animationSpec = spring(
+                                            stiffness = Spring.StiffnessMediumLow
+                                        )
+                                    ) togetherWith fadeOut(
+                                        animationSpec = spring(
+                                            stiffness = Spring.StiffnessMedium
+                                        )
                                     )
-                                }
+                                },
+                                label = "TabTransition120Hz"
+                            ) { targetTab ->
+                                when (targetTab) {
+                                    OptiShareTab.SEND -> {
+                                        SendQrScreen(
+                                            senderState = senderState,
+                                            onPickFileUri = { uri ->
+                                                transferViewModel.prepareStreamFromUri(context, uri)
+                                            },
+                                            onCapturePhotoBitmap = { bitmap ->
+                                                transferViewModel.prepareStreamFromCapturedPhoto(bitmap)
+                                            },
+                                            onCreateTextNote = { title, content ->
+                                                transferViewModel.prepareStreamFromTextNote(title, content)
+                                            },
+                                            onLoadSampleFile = {
+                                                transferViewModel.loadSampleSpecDocument()
+                                            },
+                                            onTogglePlayPause = {
+                                                transferViewModel.toggleSenderPlayPause()
+                                            },
+                                            onStepFrame = { delta ->
+                                                transferViewModel.stepSenderFrame(delta)
+                                            },
+                                            onAdvanceAutoFrame = {
+                                                transferViewModel.advanceToNextActiveFrame()
+                                            },
+                                            onFpsChange = { fps ->
+                                                transferViewModel.updateSenderFps(fps)
+                                            },
+                                            onUpdateConfig = { chunkSize, ecc ->
+                                                transferViewModel.updateStreamConfig(chunkSize, ecc)
+                                            },
+                                            onToggleMissingChunkFilter = { idx ->
+                                                transferViewModel.toggleMissingChunkFilter(idx)
+                                            },
+                                            onClearMissingChunkFilter = {
+                                                transferViewModel.clearMissingChunkFilter()
+                                            },
+                                            onNavigateToReceiveLoopback = {
+                                                currentTab = OptiShareTab.RECEIVE
+                                                transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
+                                            }
+                                        )
+                                    }
 
-                                OptiShareTab.RECEIVE -> {
-                                    ReceiveScanScreen(
-                                        receiverState = receiverState,
-                                        onQrScanned = { qrStr ->
-                                            transferViewModel.onQrStringScanned(qrStr)
-                                        },
-                                        onResetSession = {
-                                            transferViewModel.resetReceiverSession()
-                                        },
-                                        onStartLoopbackSimulation = {
-                                            transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
-                                        },
-                                        onRetransmitCompletedRecord = { record ->
-                                            transferViewModel.loadVaultRecordIntoSender(record)
-                                            currentTab = OptiShareTab.SEND
-                                        },
-                                        onOpenVault = {
-                                            currentTab = OptiShareTab.VAULT
-                                        }
-                                    )
-                                }
+                                    OptiShareTab.RECEIVE -> {
+                                        ReceiveScanScreen(
+                                            receiverState = receiverState,
+                                            onQrScanned = { qrStr ->
+                                                transferViewModel.onQrStringScanned(qrStr)
+                                            },
+                                            onResetSession = {
+                                                transferViewModel.resetReceiverSession()
+                                            },
+                                            onStartLoopbackSimulation = {
+                                                transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
+                                            },
+                                            onRetransmitCompletedRecord = { record ->
+                                                transferViewModel.loadVaultRecordIntoSender(record)
+                                                currentTab = OptiShareTab.SEND
+                                            },
+                                            onOpenVault = {
+                                                currentTab = OptiShareTab.VAULT
+                                            }
+                                        )
+                                    }
 
-                                OptiShareTab.VAULT -> {
-                                    VaultScreen(
-                                        records = vaultRecords,
-                                        onRetransmitViaQr = { record ->
-                                            transferViewModel.loadVaultRecordIntoSender(record)
-                                            currentTab = OptiShareTab.SEND
-                                        },
-                                        onRenameRecord = { id, newName ->
-                                            transferViewModel.renameVaultRecord(id, newName)
-                                        },
-                                        onDeleteRecord = { record ->
-                                            transferViewModel.deleteVaultRecord(record)
-                                        }
-                                    )
-                                }
+                                    OptiShareTab.VAULT -> {
+                                        VaultScreen(
+                                            records = vaultRecords,
+                                            onRetransmitViaQr = { record ->
+                                                transferViewModel.loadVaultRecordIntoSender(record)
+                                                currentTab = OptiShareTab.SEND
+                                            },
+                                            onRenameRecord = { id, newName ->
+                                                transferViewModel.renameVaultRecord(id, newName)
+                                            },
+                                            onDeleteRecord = { record ->
+                                                transferViewModel.deleteVaultRecord(record)
+                                            }
+                                        )
+                                    }
 
-                                OptiShareTab.SETTINGS -> {
-                                    SettingsScreen(
-                                        customization = customization,
-                                        onUpdateCustomization = { transform ->
-                                            themeManager.update(transform)
-                                        },
-                                        onApplyPreset = { preset ->
-                                            themeManager.applyQuickPreset(preset)
-                                        },
-                                        onResetDefaults = {
-                                            themeManager.resetToDefaults()
-                                        }
-                                    )
+                                    OptiShareTab.SETTINGS -> {
+                                        SettingsScreen(
+                                            customization = customization,
+                                            activeRefreshRateHz = activeRefreshRateHz,
+                                            onUpdateCustomization = { transform ->
+                                                themeManager.update(transform)
+                                            },
+                                            onApplyPreset = { preset ->
+                                                themeManager.applyQuickPreset(preset)
+                                            },
+                                            onResetDefaults = {
+                                                themeManager.resetToDefaults()
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -441,8 +535,7 @@ fun OptiShareApp(
 /**
  * Material You Floating Bottom Navigation Bar:
  * Detached from the screen edges with balanced rounded corners (22dp),
- * subtle tonal and shadow elevation to distinguish its layer, and clear
- * secondaryContainer selection indicators.
+ * 120Hz spring-interpolated selection states, and GPU-accelerated graphicsLayer scaling.
  */
 @Composable
 private fun FloatingMaterialNavigationBar(
@@ -451,8 +544,8 @@ private fun FloatingMaterialNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val barShape = RoundedCornerShape(22.dp)
-    val itemShape = RoundedCornerShape(14.dp)
+    val barShape = remember { RoundedCornerShape(22.dp) }
+    val itemShape = remember { RoundedCornerShape(14.dp) }
 
     Surface(
         shape = barShape,
@@ -477,11 +570,30 @@ private fun FloatingMaterialNavigationBar(
                 val selected = currentTab == tab
                 val labelText = stringResource(tab.titleRes)
 
+                val itemContainerColor by animateColorAsState(
+                    targetValue = if (selected) colorScheme.secondaryContainer else Color.Transparent,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "NavTabContainer120Hz"
+                )
+                val itemContentColor by animateColorAsState(
+                    targetValue = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "NavTabContent120Hz"
+                )
+                val iconScale by animateFloatAsState(
+                    targetValue = if (selected) 1.06f else 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    ),
+                    label = "NavTabScale120Hz"
+                )
+
                 Surface(
                     onClick = { onSelectTab(tab) },
                     shape = itemShape,
-                    color = if (selected) colorScheme.secondaryContainer else Color.Transparent,
-                    contentColor = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                    color = itemContainerColor,
+                    contentColor = itemContentColor,
                     modifier = Modifier
                         .weight(1f)
                         .defaultMinSize(minHeight = 56.dp)
@@ -499,7 +611,12 @@ private fun FloatingMaterialNavigationBar(
                         Icon(
                             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
                             contentDescription = labelText,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer {
+                                    scaleX = iconScale
+                                    scaleY = iconScale
+                                }
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(

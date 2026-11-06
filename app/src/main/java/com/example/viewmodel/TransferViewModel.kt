@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -30,13 +31,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
+@Immutable
 data class SenderUiState(
     val isPreparing: Boolean = false,
     val stream: PreparedOpticalStream? = null,
     val qrBitmaps: List<Bitmap> = emptyList(),
     val currentFramePosition: Int = 0,
     val isPlaying: Boolean = true,
-    val fps: Int = 5,
+    val fps: Int = 6,
     val chunkSize: Int = 380,
     val blockSize: Int = 4,
     val eccLevel: QrEccLevel = QrEccLevel.M,
@@ -45,6 +47,7 @@ data class SenderUiState(
     val errorMessage: String? = null
 )
 
+@Immutable
 data class ReceiverUiState(
     val activeSessionId: String? = null,
     val fileName: String = "",
@@ -306,7 +309,7 @@ class TransferViewModel(
     }
 
     fun updateSenderFps(newFps: Int) {
-        _senderState.update { it.copy(fps = newFps.coerceIn(1, 12)) }
+        _senderState.update { it.copy(fps = newFps.coerceIn(1, 24)) }
     }
 
     fun toggleSenderPlayPause() {

@@ -1,5 +1,6 @@
 package com.example.domain.protocol
 
+import androidx.compose.runtime.Immutable
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
@@ -30,6 +31,7 @@ enum class ChunkReceptionState {
     RECOVERED_PARITY
 }
 
+@Immutable
 data class OpticalPacket(
     val sessionId: String,
     val kind: PacketKind,
@@ -50,6 +52,7 @@ data class OpticalPacket(
         get() = if (kind == PacketKind.DATA) "D#${index + 1}" else "P#${index + 1}"
 }
 
+@Immutable
 data class PreparedOpticalStream(
     val sessionId: String,
     val fileName: String,
@@ -66,6 +69,7 @@ data class PreparedOpticalStream(
     val encodedQrStrings: List<String>
 )
 
+@Immutable
 data class ReconstructedFileResult(
     val sessionId: String,
     val fileName: String,

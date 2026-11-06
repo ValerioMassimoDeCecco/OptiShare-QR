@@ -18,6 +18,9 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -76,8 +79,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -101,7 +106,6 @@ import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.SenderUiState
-import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -191,6 +195,9 @@ fun SendQrScreen(
         }
     }
 
+    val currentAdvanceCallback by rememberUpdatedState(onAdvanceAutoFrame)
+
+    // 120Hz Choreographer VSync-locked optical frame pacer (eliminates timer drift & tearing)
     LaunchedEffect(
         senderState.isPlaying,
         senderState.fps,
@@ -199,10 +206,19 @@ fun SendQrScreen(
     ) {
         val totalFrames = senderState.qrBitmaps.size
         if (senderState.isPlaying && totalFrames > 1) {
-            val intervalMs = (1000L / senderState.fps.coerceIn(1, 12)).coerceAtLeast(80L)
+            val targetFps = senderState.fps.coerceIn(1, 24)
+            val intervalNanos = 1_000_000_000L / targetFps
+            var lastStepNanos = withFrameNanos { it }
             while (true) {
-                delay(intervalMs)
-                onAdvanceAutoFrame()
+                val frameNanos = withFrameNanos { it }
+                if (frameNanos - lastStepNanos >= intervalNanos) {
+                    // Align to VSync cadence without accumulating drift
+                    lastStepNanos += intervalNanos
+                    if (frameNanos - lastStepNanos > intervalNanos) {
+                        lastStepNanos = frameNanos
+                    }
+                    currentAdvanceCallback()
+                }
             }
         }
     }
@@ -714,11 +730,24 @@ private fun OpticalStagePanel(
             }
         }
     } else if (stream != null && bitmaps.isNotEmpty()) {
-        val safeIndex = senderState.currentFramePosition.coerceIn(0, bitmaps.lastIndex)
+        // Pre-cache ImageBitmaps once per stream so 120Hz frame updates do zero allocation
+        val cachedImageBitmaps = remember(bitmaps) {
+            bitmaps.map { it.asImageBitmap() }
+        }
+        val safeIndex = senderState.currentFramePosition.coerceIn(0, cachedImageBitmaps.lastIndex)
         val currentPacket = stream.allOrderedPackets[safeIndex]
-        val currentBitmap = bitmaps[safeIndex]
+        val currentImageBitmap = cachedImageBitmaps[safeIndex]
         val isParity = currentPacket.kind == PacketKind.PARITY
         val statusAccent = if (isParity) colorScheme.secondary else colorScheme.primary
+
+        val smoothProgress by animateFloatAsState(
+            targetValue = (safeIndex + 1).toFloat() / cachedImageBitmaps.size.toFloat(),
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
+            label = "QrFrameProgress120Hz"
+        )
 
         OptiShareCard(
             isHighlighted = true,
@@ -783,7 +812,7 @@ private fun OpticalStagePanel(
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        bitmap = currentBitmap.asImageBitmap(),
+                        bitmap = currentImageBitmap,
                         contentDescription = "Codice QR Pacchetto ${currentPacket.displayNumber}",
                         filterQuality = FilterQuality.None,
                         modifier = Modifier.fillMaxSize()
@@ -811,9 +840,9 @@ private fun OpticalStagePanel(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Frame Progress Scrubber & Readout
+                // Frame Progress Scrubber & Readout (120Hz Smooth Interpolated)
                 LinearProgressIndicator(
-                    progress = { (safeIndex + 1).toFloat() / bitmaps.size.toFloat() },
+                    progress = { smoothProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp),
@@ -830,14 +859,14 @@ private fun OpticalStagePanel(
                     Text(
                         text = "FRAME %02d/%02d · CRC32 %s".format(
                             safeIndex + 1,
-                            bitmaps.size,
+                            cachedImageBitmaps.size,
                             currentPacket.crc32Hex.uppercase()
                         ),
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${senderState.fps} FPS · ECC ${senderState.eccLevel.name}",
+                        text = "${senderState.fps} FPS · 120Hz VSync · ECC ${senderState.eccLevel.name}",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurface
                     )
@@ -1018,17 +1047,17 @@ private fun InspectorTabbedPanel(
                 }
 
                 1 -> {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Velocità flusso (Frame Rate)",
+                                text = "Velocità flusso (120Hz VSync Sync)",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "${senderState.fps} FPS (${1000 / senderState.fps} ms/frame)",
+                                text = "${senderState.fps} FPS (${1000 / senderState.fps.coerceAtLeast(1)} ms/frame)",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = colorScheme.primary
                             )
@@ -1036,9 +1065,15 @@ private fun InspectorTabbedPanel(
                         Slider(
                             value = senderState.fps.toFloat(),
                             onValueChange = { onFpsChange(it.toInt()) },
-                            valueRange = 1f..12f,
-                            steps = 10,
+                            valueRange = 1f..24f,
+                            steps = 22,
                             modifier = Modifier.testTag("fps_slider")
+                        )
+                        SegmentedSelectorBar(
+                            items = listOf(6, 12, 20, 24),
+                            selectedItem = senderState.fps,
+                            onItemSelected = { onFpsChange(it) },
+                            labelProvider = { "$it FPS" }
                         )
                     }
 

@@ -1,6 +1,7 @@
 package com.example.ui.theme
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,6 +92,7 @@ enum class AppFontChoice(val label: String) {
     JETBRAINS_MONO("JetBrains Mono")
 }
 
+@Immutable
 data class AppCustomizationState(
     val designStyle: DesignStyle = DesignStyle.MATERIAL,
     val themeMode: ThemeModeOption = ThemeModeOption.SYSTEM,
@@ -98,6 +100,7 @@ data class AppCustomizationState(
     val useDynamicColor: Boolean = true,
     val fontChoice: AppFontChoice = AppFontChoice.PLUS_JAKARTA,
     val fontScale: Float = 1.0f,
+    val preferHighRefreshRate: Boolean = true,
 
     // Material Design 3 Customizations
     val materialCornerRadiusDp: Int = 16,
@@ -139,6 +142,7 @@ class ThemeSettingsManager(context: Context) {
                 AppFontChoice.valueOf(prefs.getString("fontChoice", AppFontChoice.PLUS_JAKARTA.name)!!)
             }.getOrDefault(AppFontChoice.PLUS_JAKARTA),
             fontScale = prefs.getFloat("fontScale", 1.0f).coerceIn(0.85f, 1.20f),
+            preferHighRefreshRate = prefs.getBoolean("preferHighRefreshRate", true),
             materialCornerRadiusDp = prefs.getInt("materialCornerRadiusDp", 16).coerceIn(0, 28),
             materialBorderWidthDp = prefs.getFloat("materialBorderWidthDp", 1.0f).coerceIn(0f, 2.5f),
             materialSurfaceContrast = prefs.getFloat("materialSurfaceContrast", 1.0f).coerceIn(0.3f, 1.0f),
@@ -174,6 +178,7 @@ class ThemeSettingsManager(context: Context) {
                     palette = AccentPalettePreset.SIGNAL_COBALT,
                     useDynamicColor = true,
                     fontChoice = AppFontChoice.PLUS_JAKARTA,
+                    preferHighRefreshRate = it.preferHighRefreshRate,
                     materialCornerRadiusDp = 16,
                     materialBorderWidthDp = 1.0f,
                     materialSurfaceContrast = 1.0f,
@@ -229,6 +234,7 @@ class ThemeSettingsManager(context: Context) {
             .putBoolean("useDynamicColor", s.useDynamicColor)
             .putString("fontChoice", s.fontChoice.name)
             .putFloat("fontScale", s.fontScale)
+            .putBoolean("preferHighRefreshRate", s.preferHighRefreshRate)
             .putInt("materialCornerRadiusDp", s.materialCornerRadiusDp)
             .putFloat("materialBorderWidthDp", s.materialBorderWidthDp)
             .putFloat("materialSurfaceContrast", s.materialSurfaceContrast)

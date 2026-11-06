@@ -20,6 +20,9 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -527,8 +530,17 @@ private fun AssemblyMatrixInstrumentPanel(receiverState: ReceiverUiState) {
                 color = colorScheme.onSurface
             )
 
+            val smoothTransferProgress by animateFloatAsState(
+                targetValue = receiverState.transferProgress,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "ReceiveTransferProgress120Hz"
+            )
+
             LinearProgressIndicator(
-                progress = { receiverState.transferProgress },
+                progress = { smoothTransferProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(4.dp),
@@ -763,10 +775,12 @@ private fun CameraXQrScannerPreview(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
 
+                    var lastDispatchedQr: String? = null
                     imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
                         try {
                             val decodedText = QrCodecEngine.decodeFromImageProxy(imageProxy)
-                            if (!decodedText.isNullOrBlank()) {
+                            if (!decodedText.isNullOrBlank() && decodedText != lastDispatchedQr) {
+                                lastDispatchedQr = decodedText
                                 previewView.post {
                                     onQrStringDecoded(decodedText)
                                 }

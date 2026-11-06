@@ -25,20 +25,19 @@ SIL Open Font License 1.1. See `LICENSE` and `licenses/fonts/` in the repository
 **Summary:** Transfer files offline using sequences of QR codes
 
 **Description:** OptiShare QR transfers files between devices using sequences
-of QR codes without a network connection. It uses GZIP compression, CRC32
-packet checks, SHA-256 file integrity verification and XOR parity packets to
-help recover missing data. Transfers are kept in a local archive. QR codes are
-not encrypted.
+of QR codes without a network connection. It uses GZIP and multi-file ZIP
+compression, optional AES-256-GCM password encryption, CRC32 packet checks,
+SHA-256 file integrity verification, XOR parity packets, and Reverse NACK QR
+recovery. It also includes a standard QR generator for Wi-Fi, vCard contacts,
+and text. Transfers are kept in a local archive.
 
-**Version:** 1.0 (`versionCode` 1), as declared in `app/build.gradle.kts`.
+**Version:** 1.0.3 (`versionCode` 3), as declared in `app/build.gradle.kts`.
 
 **Build information:** Android/Gradle project; app module is `app`. The
-repository contains Fastlane descriptions in English and Italian. The project
-specifies Gradle 9.3.1 and Android Gradle Plugin 9.1.1, but the Gradle wrapper
-scripts and JAR are not included. The release build configures an upstream
-keystore; F-Droid's signing removal and the resulting unsigned build have not
-yet been tested. No source release tag has been created. Font provenance and
-other dependencies still require review. The app author requested submission.
+repository contains Fastlane descriptions and changelogs (`1.txt`, `2.txt`,
+`3.txt`) in English and Italian. The project includes the complete Gradle 9.3.1
+wrapper and configures an unsigned release build when upstream signing keys are
+absent.
 
 ---
 
@@ -69,15 +68,15 @@ Update from upstream:
   itself. This was checked against remove_signing_keys in fdroidserver, which
   strips signingConfigs from app/build.gradle.kts: the resulting file is still
   valid and balanced.
-* Source snapshot: tagged release v1.0 (versionName 1.0, versionCode 1).
-* Fastlane metadata for en-US and it now includes the changelog for
-  versionCode 1.
+* Source snapshot: tagged release v1.0.3 (versionName 1.0.3, versionCode 3).
+* Fastlane metadata for en-US and it now includes changelogs up to
+  versionCode 3 (1.0.3).
 * Proposed build metadata: docs/fdroiddata/com.aistudio.optishareqr.xkvpzr.yml
-  (subdir: app, gradle: yes, commit: v1.0). No scanignore is needed:
+  (subdir: app, gradle: yes, commit: v1.0.3). No scanignore is needed:
   fdroidserver's scanner explicitly allows gradle/wrapper/gradle-wrapper.jar,
   gradlew and gradlew.bat.
-* GitHub Actions runs ./gradlew assembleRelease on every push and publishes the
-  unsigned APK as an artifact, so the build result is public.
+* GitHub Actions runs ./gradlew assembleDebug assembleRelease and publishes
+  release v1.0.3 in GitHub Releases automatically.
 
 Still open, and not yet verified:
 * [no build has been run locally: no JDK, Android SDK or Maven access in the

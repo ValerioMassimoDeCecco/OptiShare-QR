@@ -1,5 +1,5 @@
-OptiShare QR trasferisce file tra dispositivi tramite sequenze di codici QR, senza connessione di rete. Scegli un file, crea una nota di testo o scatta una foto, poi inquadra i codici visualizzati con il dispositivo ricevente.
+OptiShare QR trasferisce file tra dispositivi tramite sequenze di codici QR ad alta frequenza (fino a 120Hz VSync), senza alcuna connessione di rete, Wi-Fi o Bluetooth. Scegli uno o più file (con compressione automatica in archivio ZIP), crea una nota di testo, scatta una foto o genera un codice QR standard universale per reti Wi-Fi e contatti vCard.
 
-Il protocollo comprime i dati con GZIP, controlla i pacchetti con CRC32 e verifica il file ricostruito con SHA-256. I pacchetti di parità XOR possono aiutare a recuperare un pacchetto dati mancante in un blocco. I trasferimenti sono salvati localmente nell'archivio, da cui è possibile esportare o condividere i file.
+Il protocollo comprime i dati con GZIP, permette di proteggere il flusso con crittografia autenticata AES-256-GCM tramite password (PBKDF2-HMAC-SHA256), controlla i pacchetti con CRC32 e verifica il file ricostruito con SHA-256. I pacchetti di parità XOR e il QR inverso NACK permettono di recuperare rapidamente eventuali pacchetti mancanti.
 
-Il permesso fotocamera è utilizzato per leggere i codici QR. I codici QR non sono cifrati: chi riesce a catturare la sequenza potrebbe ricostruirne il contenuto.
+Il permesso fotocamera è utilizzato esclusivamente in locale per leggere i codici QR (con supporto a torcia flash e zoom rapido 1x/1.5x/2x).

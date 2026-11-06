@@ -1,4 +1,4 @@
-name: Android build
+name: Android build & Release v1.0.3
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up the JDK
         uses: actions/setup-java@v4
@@ -25,31 +27,72 @@ jobs:
           cache: gradle
 
       # Debug APKs are signed automatically by AGP and can be installed without
-      # configuring release signing secrets. The debug signing identity may not
-      # match APKs signed with another key, so an existing install may need to
-      # be removed before installing this one.
-      - name: Assemble installable debug APK
-        run: ./gradlew --no-daemon assembleDebug
+      # configuring release signing secrets. Release APKs stay unsigned when no
+      # keystore is provided, matching F-Droid's reproducible source build.
+      - name: Assemble installable debug APK and unsigned release APK
+        run: |
+          ./gradlew --no-daemon assembleDebug assembleRelease
+          cp -f app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk
 
-      - name: List the APK
-        run: ls -lh app/build/outputs/apk/debug/app-debug.apk
+      - name: List generated APKs
+        run: |
+          ls -lh app/build/outputs/apk/debug/
+          ls -lh app/build/outputs/apk/release/
 
       - name: Upload installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: optishare-qr-debug-installable
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: optishare-qr-v1.0.3-apks
+          path: |
+            app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
-      - name: Publish debug APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish v1.0.3 to GitHub Releases
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" app/build/outputs/apk/debug/app-debug.apk --clobber
+          RELEASE_TAG="v1.0.3"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+
+          # Ensure tag v1.0.3 exists on the repository so F-Droid and GitHub Releases can track it
+          if ! git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$RELEASE_TAG" -m "OptiShare QR $RELEASE_TAG"
+            git push origin "$RELEASE_TAG" || true
+          fi
+
+          NOTES_FILE="fastlane/metadata/android/it/changelogs/3.txt"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+              app/build/outputs/apk/debug/app-debug.apk \
+              app/build/outputs/apk/release/app-release-unsigned.apk \
+              --clobber
+            if [ -f "$NOTES_FILE" ]; then
+              gh release edit "$RELEASE_TAG" \
+                --title "OptiShare QR $RELEASE_TAG" \
+                --notes-file "$NOTES_FILE"
+            fi
           else
-            gh release create "$GITHUB_REF_NAME" app/build/outputs/apk/debug/app-debug.apk \
-              --title "OptiShare QR $GITHUB_REF_NAME (debug-signed)" \
-              --generate-notes
+            if [ -f "$NOTES_FILE" ]; then
+              gh release create "$RELEASE_TAG" \
+                app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+                app/build/outputs/apk/debug/app-debug.apk \
+                app/build/outputs/apk/release/app-release-unsigned.apk \
+                --title "OptiShare QR $RELEASE_TAG" \
+                --notes-file "$NOTES_FILE"
+            else
+              gh release create "$RELEASE_TAG" \
+                app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+                app/build/outputs/apk/debug/app-debug.apk \
+                app/build/outputs/apk/release/app-release-unsigned.apk \
+                --title "OptiShare QR $RELEASE_TAG" \
+                --generate-notes
+            fi
           fi

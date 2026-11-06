@@ -27,17 +27,16 @@ significa che l'app sia stata approvata o pubblicata. Una richiesta è aperta:
   delle espressioni regolari, e il file che resta è ancora bilanciato e valido.
 - **Metadati Fastlane.** Titolo e descrizioni in italiano e inglese con le note
   di rilascio in `changelogs/<versionCode>.txt` (oggi `changelogs/3.txt` per il
-  `versionCode` 3).
+  `versionCode` 3, versione `1.0.3`).
 - **Tag sorgente immutabile.** Il commit di release è identificato dal tag
-  `v1.0`, così la richiesta può indicare uno snapshot preciso e F-Droid può
+  `v1.0.3`, così la richiesta può indicare uno snapshot preciso e F-Droid può
   seguire i tag per gli aggiornamenti.
 - **Metadati di build proposti.** `docs/fdroiddata/com.aistudio.optishareqr.xkvpzr.yml`
   contiene la ricetta pronta per `fdroiddata` (`subdir: app`, `gradle: [yes]`,
-  `commit: v1.0`), da allegare alla richiesta o da proporre con una merge request.
-- **Verifica della build in CI.** `.github/workflows/build.yml` esegue
-  `./gradlew assembleRelease` a ogni push e pubblica l'APK non firmato come
-  artefatto, così l'esito della build è visibile e l'APK è confrontabile con
-  quello prodotto da F-Droid.
+  `commit: v1.0.3`), da allegare alla richiesta o da proporre con una merge request.
+- **Verifica della build e pubblicazione in GitHub Releases.** `.github/workflows/build.yml` esegue
+  `./gradlew assembleDebug assembleRelease` a ogni push su `main`, crea il tag `v1.0.3` e pubblica
+  automaticamente la release `v1.0.3` nella sezione **Releases** di GitHub con gli APK allegati.
 
 ## Da verificare prima di chiedere la pubblicazione
 

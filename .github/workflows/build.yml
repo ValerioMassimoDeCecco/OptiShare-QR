@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  assemble-release:
+  assemble:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repository
@@ -21,22 +21,31 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          # AGP 9.x needs a recent JDK: raise this version if the Android Gradle
-          # Plugin requires it.
           java-version: "21"
           cache: gradle
 
-      - name: Assemble the release APK
-        # No keystore is configured in CI, so the release build stays unsigned
-        # (app-release-unsigned.apk). That is also what F-Droid needs, and it
-        # makes the CI output comparable with the APK built by F-Droid.
-        run: ./gradlew --no-daemon assembleRelease
+      # Debug APKs are signed automatically by AGP and can be installed without
+      # configuring release signing secrets. The debug signing identity may not
+      # match APKs signed with another key, so an existing install may need to
+      # be removed before installing this one.
+      - name: Assemble installable debug APK
+        run: ./gradlew --no-daemon assembleDebug
 
       - name: List the APK
-        run: ls -l app/build/outputs/apk/release/
+        run: ls -lh app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload the APK
+      - name: Upload installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-unsigned
-          path: app/build/outputs/apk/release/*.apk
+          name: optishare-qr-debug-installable
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish debug APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" app/build/outputs/apk/debug/app-debug.apk \
+            --title "OptiShare QR $GITHUB_REF_NAME (debug-signed)" \
+            --generate-notes

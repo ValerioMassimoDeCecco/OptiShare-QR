@@ -1,0 +1,7 @@
+# Ensure Unix shell scripts always keep LF line endings on checkout
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows batch scripts keep CRLF line endings
+gradlew.bat text eol=crlf
+*.bat text eol=crlf

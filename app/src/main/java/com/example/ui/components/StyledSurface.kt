@@ -154,18 +154,26 @@ fun SectionHeaderRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = if (trailingContent != null) 8.dp else 0.dp)
+        ) {
             Text(
                 text = overline,
                 style = MaterialTheme.typography.labelMedium,
                 color = colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = colorScheme.onSurface
+                color = colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         if (trailingContent != null) {
@@ -232,14 +240,15 @@ fun <T> SegmentedSelectorBar(
                         }
                 ) {
                     Box(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = labelProvider(item),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -274,6 +283,7 @@ fun TelemetryMetricCell(
                 style = MaterialTheme.typography.labelSmall,
                 color = colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
@@ -283,6 +293,7 @@ fun TelemetryMetricCell(
                 fontWeight = FontWeight.SemiBold,
                 color = valueColor,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -291,7 +302,7 @@ fun TelemetryMetricCell(
 
 /**
  * Accessible Material 3 Action Button (48dp minimum touch height) with moderate 12dp corners
- * (avoiding excessive pill shapes) and clear primary / tonal states.
+ * and guaranteed single-line non-wrapped labels.
  */
 @Composable
 fun InstrumentActionButton(
@@ -302,26 +313,27 @@ fun InstrumentActionButton(
     isPrimary: Boolean = false,
     enabled: Boolean = true
 ) {
-    val buttonShape = RoundedCornerShape(12.dp)
+    val buttonShape = remember { RoundedCornerShape(12.dp) }
 
     if (isPrimary) {
         Button(
             onClick = onClick,
             enabled = enabled,
             shape = buttonShape,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
             modifier = modifier.defaultMinSize(minHeight = 48.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(17.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -330,7 +342,7 @@ fun InstrumentActionButton(
             onClick = onClick,
             enabled = enabled,
             shape = buttonShape,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
             colors = ButtonDefaults.filledTonalButtonColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -340,13 +352,14 @@ fun InstrumentActionButton(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(17.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }

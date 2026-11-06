@@ -1200,9 +1200,14 @@ private fun SourceToolbarPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Sorgente file & Strumenti Offline",
+                    text = "Sorgente file",
                     style = MaterialTheme.typography.titleSmall,
-                    color = colorScheme.onSurface
+                    color = colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1228,7 +1233,9 @@ private fun SourceToolbarPanel(
                             Text(
                                 text = if (isEncrypted) "AES-256 ON" else "AES-256 OFF",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant
+                                color = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -1238,9 +1245,11 @@ private fun SourceToolbarPanel(
                         color = colorScheme.secondaryContainer
                     ) {
                         Text(
-                            text = "GZIP · XOR FEC",
+                            text = "GZIP · XOR",
                             style = MaterialTheme.typography.labelSmall,
                             color = colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
@@ -1265,7 +1274,7 @@ private fun SourceToolbarPanel(
                     icon = Icons.Default.FolderZip,
                     onClick = onPickMultiZip,
                     modifier = Modifier
-                        .weight(1.05f)
+                        .weight(1f)
                         .testTag("pick_multi_zip_button")
                 )
                 InstrumentActionButton(
@@ -1374,7 +1383,11 @@ private fun OpticalStagePanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1383,7 +1396,8 @@ private fun OpticalStagePanel(
                                 text = stream.fileName,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             if (stream.isEncrypted) {
                                 Icon(
@@ -1400,7 +1414,9 @@ private fun OpticalStagePanel(
                             text = "ID ${stream.sessionId} · ${stream.originalBytes.size} B → ${stream.compressedBytes.size} B" +
                                 if (stream.isEncrypted) " (AES-256)" else " (GZIP)",
                             style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onSurfaceVariant
+                            color = colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1420,7 +1436,9 @@ private fun OpticalStagePanel(
                                 "PKT ${currentPacket.displayNumber}/${stream.dataPackets.size}"
                             },
                             style = MaterialTheme.typography.labelMedium,
-                            color = statusAccent
+                            color = statusAccent,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -1476,7 +1494,8 @@ private fun OpticalStagePanel(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "FRAME %02d/%02d · %.1f KB/s · Ciclo %.1fs".format(
@@ -1487,12 +1506,19 @@ private fun OpticalStagePanel(
                             senderState.estimatedCycleSeconds
                         ),
                         style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.onSurfaceVariant
+                        color = colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
                     Text(
-                        text = "${senderState.fps} FPS · 120Hz VSync",
+                        text = "${senderState.fps} FPS · 120Hz",
                         style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.onSurface
+                        color = colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -1500,66 +1526,77 @@ private fun OpticalStagePanel(
                 HorizontalDivider(color = colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    IconButton(
-                        onClick = { onStepFrame(-1) },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
-                            .testTag("prev_qr_frame_button")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.SkipPrevious,
-                            contentDescription = "Frame precedente",
-                            modifier = Modifier.size(18.dp)
+                        IconButton(
+                            onClick = { onStepFrame(-1) },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
+                                .testTag("prev_qr_frame_button")
+                        ) {
+                            Icon(
+                                Icons.Default.SkipPrevious,
+                                contentDescription = "Frame precedente",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        InstrumentActionButton(
+                            label = if (senderState.isPlaying) "Pausa Flusso" else "Avvia Flusso",
+                            icon = if (senderState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            onClick = onTogglePlayPause,
+                            isPrimary = true,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("play_pause_qr_button")
                         )
+
+                        IconButton(
+                            onClick = { onStepFrame(1) },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
+                                .testTag("next_qr_frame_button")
+                        ) {
+                            Icon(
+                                Icons.Default.SkipNext,
+                                contentDescription = "Frame successivo",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
 
-                    InstrumentActionButton(
-                        label = if (senderState.isPlaying) "Pausa" else "Avvia",
-                        icon = if (senderState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        onClick = onTogglePlayPause,
-                        isPrimary = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("play_pause_qr_button")
-                    )
-
-                    IconButton(
-                        onClick = { onStepFrame(1) },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
-                            .testTag("next_qr_frame_button")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.SkipNext,
-                            contentDescription = "Frame successivo",
-                            modifier = Modifier.size(18.dp)
+                        InstrumentActionButton(
+                            label = "Scansiona NACK",
+                            icon = Icons.Default.QrCodeScanner,
+                            onClick = onOpenNackScanner,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("scan_nack_from_sender_button")
+                        )
+
+                        InstrumentActionButton(
+                            label = "Test Loopback",
+                            icon = Icons.Default.VerifiedUser,
+                            onClick = onNavigateToReceiveLoopback,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("run_loopback_from_sender_button")
                         )
                     }
-
-                    InstrumentActionButton(
-                        label = "NACK",
-                        icon = Icons.Default.QrCodeScanner,
-                        onClick = onOpenNackScanner,
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .testTag("scan_nack_from_sender_button")
-                    )
-
-                    InstrumentActionButton(
-                        label = "Loopback",
-                        icon = Icons.Default.VerifiedUser,
-                        onClick = onNavigateToReceiveLoopback,
-                        modifier = Modifier
-                            .weight(1.05f)
-                            .testTag("run_loopback_from_sender_button")
-                    )
                 }
             }
         }
@@ -1685,16 +1722,24 @@ private fun InspectorTabbedPanel(
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Velocità flusso (120Hz VSync Sync)",
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "Velocità flusso (120Hz VSync)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
                             Text(
-                                text = "${senderState.fps} FPS (${1000 / senderState.fps.coerceAtLeast(1)} ms/frame)",
+                                text = "${senderState.fps} FPS (${1000 / senderState.fps.coerceAtLeast(1)} ms)",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = colorScheme.primary
+                                color = colorScheme.primary,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                         Slider(
@@ -1720,7 +1765,9 @@ private fun InspectorTabbedPanel(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
                         ) {
                             Icon(
                                 Icons.Default.BrightnessHigh,
@@ -1777,24 +1824,27 @@ private fun InspectorTabbedPanel(
                 }
 
                 2 -> {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
                             text = "Scansiona il QR NACK del ricevitore o tocca i pacchetti da ritrasmettere:",
                             style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
+                            color = colorScheme.onSurfaceVariant
                         )
                         FilledTonalButton(
                             onClick = onOpenNackScanner,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Scansiona NACK", style = MaterialTheme.typography.labelSmall)
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Scansiona QR NACK dal Ricevitore",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 
@@ -1805,12 +1855,21 @@ private fun InspectorTabbedPanel(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Filtro attivo: ${senderState.selectedMissingDataIndices.size} su ${stream.dataPackets.size} PKT",
+                                text = "Filtro attivo: ${senderState.selectedMissingDataIndices.size}/${stream.dataPackets.size} PKT",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = colorScheme.primary
+                                color = colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
                             TextButton(onClick = onClearMissingChunkFilter) {
-                                Text("Ripristina Tutti (${stream.dataPackets.size})")
+                                Text(
+                                    text = "Ripristina Tutti",
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }

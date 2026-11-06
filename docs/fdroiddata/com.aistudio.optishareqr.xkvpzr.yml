@@ -52,13 +52,6 @@ Builds:
     # No `scanignore:` needed: fdroidserver's scanner explicitly allows
     # gradle/wrapper/gradle-wrapper.jar, gradlew and gradlew.bat.
 
-  - versionName: '1.02'
-    versionCode: 3
-    commit: v1.02
-    subdir: app
-    gradle:
-      - yes
-
 MaintainerNotes: |-
     The Gradle version is pinned by gradle/wrapper/gradle-wrapper.properties
     (Gradle 9.3.1, with the SHA-256 of the distribution, which matches the one

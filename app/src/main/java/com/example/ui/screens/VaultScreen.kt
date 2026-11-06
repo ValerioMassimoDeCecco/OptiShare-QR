@@ -662,7 +662,13 @@ private fun VaultExpandableRecordCard(
                 ) {
                     Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Trasmetti QR", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = "Trasmetti QR",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 FilledTonalButton(
@@ -671,7 +677,13 @@ private fun VaultExpandableRecordCard(
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Condividi", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = "Condividi",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

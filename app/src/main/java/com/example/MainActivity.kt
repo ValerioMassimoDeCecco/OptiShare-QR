@@ -270,28 +270,30 @@ fun OptiShareApp(
                                             imageVector = Icons.Filled.QrCode2,
                                             contentDescription = null,
                                             modifier = Modifier
-                                                .padding(6.dp)
+                                                .padding(7.dp)
                                                 .size(20.dp)
                                         )
                                     }
-                                    Column {
-                                        Text(
-                                            text = "OptiShare QR",
-                                            style = MaterialTheme.typography.titleLarge,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = colorScheme.secondaryContainer,
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(1.dp),
                                         modifier = Modifier.testTag("refresh_rate_badge")
                                     ) {
                                         Text(
+                                            text = "OptiShare QR",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
                                             text = "Offline · v1.0.3 · ${activeRefreshRateHz}Hz",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = colorScheme.onSecondaryContainer,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            color = colorScheme.primary,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -328,7 +330,9 @@ fun OptiShareApp(
                                     Text(
                                         text = if (isLiquidGlass) "Glass" else "Material 3",
                                         style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             },
@@ -645,6 +649,7 @@ private fun FloatingMaterialNavigationBar(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
                     }

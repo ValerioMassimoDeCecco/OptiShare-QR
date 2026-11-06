@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SectionHeaderRow
@@ -284,7 +285,9 @@ private fun LiveDesignBenchPreviewCard(
                     text = "SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934c…",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.tertiary
+                    color = colorScheme.tertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -417,7 +420,11 @@ private fun DesignEngineSelectorPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp)
+                ) {
                     Text(
                         text = "Fluidità Schermo 120Hz (High Refresh Rate)",
                         style = MaterialTheme.typography.bodyMedium,
@@ -796,12 +803,22 @@ private fun SliderSettingRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            )
             Text(
                 text = valueText,
                 style = MaterialTheme.typography.labelMedium,
                 fontFamily = JetBrainsMonoFontFamily,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                softWrap = false
             )
         }
         Slider(

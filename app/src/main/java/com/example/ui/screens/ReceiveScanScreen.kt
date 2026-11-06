@@ -607,7 +607,9 @@ private fun CameraScannerInstrumentPanel(
                                 )
                                 Text(
                                     text = if (isTorchOn) "Flash ON" else "Flash",
-                                    style = MaterialTheme.typography.labelSmall
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -629,6 +631,8 @@ private fun CameraScannerInstrumentPanel(
                                         text = label,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                                     )
                                 }
@@ -650,12 +654,19 @@ private fun CameraScannerInstrumentPanel(
                             text = receiverState.lastScannedPacketLabel?.let { "ULTIMO PKT: $it" }
                                 ?: "ALLINEA IL QR NEL MIRINO",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
                         Text(
                             text = "${(receiverState.transferProgress * 100).toInt()}% · ${String.format(Locale.US, "%.1f", receiverState.liveSpeedKbps)} KB/s",
                             style = MaterialTheme.typography.labelMedium,
-                            color = bracketColor
+                            color = bracketColor,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -753,12 +764,19 @@ private fun AssemblyMatrixInstrumentPanel(
                     text = "TELEMETRIA ASSEMBLAGGIO PACCHETTI",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.onSurfaceVariant
+                    color = colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
                 Text(
                     text = "$acquiredCount / ${receiverState.totalDataChunks} PKT",
                     style = MaterialTheme.typography.labelMedium,
-                    color = colorScheme.primary
+                    color = colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
 
@@ -844,32 +862,41 @@ private fun AssemblyMatrixInstrumentPanel(
                             Text(
                                 text = "D#${i + 1}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = textColor
+                                color = textColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
                 }
 
                 if (missing.isNotEmpty()) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "MANCANTI (${missing.size}): ${missing.take(6).joinToString(", ") { "D#${it + 1}" }}" +
-                                if (missing.size > 6) "…" else "",
+                            text = "MANCANTI (${missing.size}): ${missing.take(8).joinToString(", ") { "D#${it + 1}" }}" +
+                                if (missing.size > 8) "…" else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = colorScheme.primary,
-                            modifier = Modifier.weight(1f)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         FilledTonalButton(
                             onClick = onGenerateNackQr,
-                            modifier = Modifier.testTag("generate_nack_qr_button")
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("generate_nack_qr_button")
                         ) {
-                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Mostra QR Mancanti (NACK)", style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                text = "Mostra QR Mancanti (NACK)",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }

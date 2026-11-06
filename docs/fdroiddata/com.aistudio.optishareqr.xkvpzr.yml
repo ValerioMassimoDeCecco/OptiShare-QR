@@ -38,6 +38,13 @@ Builds:
     subdir: app
     gradle:
       - yes
+
+  - versionName: '1.0.3'
+    versionCode: 3
+    commit: v1.0.3
+    subdir: app
+    gradle:
+      - yes
     # No `output:` needed: the release build type has no signing config when the
     # AI Studio keystore is absent, so AGP writes
     # app/build/outputs/apk/release/app-release-unsigned.apk, which matches the

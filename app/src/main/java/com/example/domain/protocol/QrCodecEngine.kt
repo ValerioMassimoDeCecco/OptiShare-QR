@@ -14,6 +14,10 @@ import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.util.EnumMap
 
 object QrCodecEngine {
@@ -22,6 +26,51 @@ object QrCodecEngine {
         put(DecodeHintType.POSSIBLE_FORMATS, listOf(BarcodeFormat.QR_CODE))
         put(DecodeHintType.TRY_HARDER, true)
         put(DecodeHintType.CHARACTER_SET, "UTF-8")
+    }
+
+    // Thread-local reusable buffers to eliminate per-frame allocations during 120Hz/60Hz camera scanning
+    private val threadLocalReader = object : ThreadLocal<QRCodeReader>() {
+        override fun initialValue(): QRCodeReader = QRCodeReader()
+    }
+    private val threadLocalYBuffer = ThreadLocal<ByteArray>()
+    private val threadLocalRotatedBuffer = ThreadLocal<ByteArray>()
+    private val threadLocalRowBuffer = ThreadLocal<ByteArray>()
+
+    private fun obtainYBuffer(size: Int): ByteArray {
+        val current = threadLocalYBuffer.get()
+        if (current != null && current.size == size) return current
+        return ByteArray(size).also { threadLocalYBuffer.set(it) }
+    }
+
+    private fun obtainRotatedBuffer(size: Int): ByteArray {
+        val current = threadLocalRotatedBuffer.get()
+        if (current != null && current.size == size) return current
+        return ByteArray(size).also { threadLocalRotatedBuffer.set(it) }
+    }
+
+    private fun obtainRowBuffer(size: Int): ByteArray {
+        val current = threadLocalRowBuffer.get()
+        if (current != null && current.size >= size) return current
+        return ByteArray(size).also { threadLocalRowBuffer.set(it) }
+    }
+
+    /**
+     * Generates a list of QR Code [Bitmap]s concurrently across all CPU cores using [Dispatchers.Default].
+     */
+    suspend fun generateQrBitmapsParallel(
+        contents: List<String>,
+        sizePx: Int = 680,
+        eccLevel: QrEccLevel = QrEccLevel.M
+    ): List<Bitmap> = coroutineScope {
+        contents.map { qrStr ->
+            async(Dispatchers.Default) {
+                generateQrBitmap(
+                    content = qrStr,
+                    sizePx = sizePx,
+                    eccLevel = eccLevel
+                )
+            }
+        }.awaitAll()
     }
 
     /**
@@ -77,7 +126,7 @@ object QrCodecEngine {
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
         val source = RGBLuminanceSource(width, height, pixels)
-        val reader = QRCodeReader()
+        val reader = threadLocalReader.get() ?: QRCodeReader()
 
         return try {
             val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
@@ -95,7 +144,8 @@ object QrCodecEngine {
     }
 
     /**
-     * Decodes a QR string from a CameraX [ImageProxy] YUV_420_888 frame in real time.
+     * Decodes a QR string from a CameraX [ImageProxy] YUV_420_888 frame in real time
+     * using zero-allocation thread-local luminance buffers.
      */
     fun decodeFromImageProxy(imageProxy: ImageProxy): String? {
         val plane = imageProxy.planes.firstOrNull() ?: return null
@@ -105,12 +155,12 @@ object QrCodecEngine {
         val width = imageProxy.width
         val height = imageProxy.height
 
-        val yBytes = ByteArray(width * height)
+        val yBytes = obtainYBuffer(width * height)
         if (rowStride == width && pixelStride == 1) {
             buffer.rewind()
             buffer.get(yBytes, 0, width * height)
         } else {
-            val rowBuffer = ByteArray(rowStride)
+            val rowBuffer = obtainRowBuffer(rowStride)
             buffer.rewind()
             for (row in 0 until height) {
                 val bytesToRead = if (row == height - 1) {
@@ -139,7 +189,7 @@ object QrCodecEngine {
             height,
             false
         )
-        val reader = QRCodeReader()
+        val reader = threadLocalReader.get() ?: QRCodeReader()
 
         // 1. Try normal orientation & luminance
         try {
@@ -160,7 +210,7 @@ object QrCodecEngine {
 
         // 3. Try 90-degree rotated Y plane (portrait phone scanning landscape/portrait QR)
         return try {
-            val rotated = rotateYPlane90(yBytes, width, height)
+            val rotated = rotateYPlane90Into(yBytes, width, height)
             val rotatedSource = PlanarYUVLuminanceSource(
                 rotated,
                 height,
@@ -179,11 +229,13 @@ object QrCodecEngine {
         }
     }
 
-    private fun rotateYPlane90(data: ByteArray, width: Int, height: Int): ByteArray {
-        val rotated = ByteArray(data.size)
+    private fun rotateYPlane90Into(data: ByteArray, width: Int, height: Int): ByteArray {
+        val rotated = obtainRotatedBuffer(data.size)
         for (y in 0 until height) {
+            val rowOffset = y * width
+            val targetCol = height - y - 1
             for (x in 0 until width) {
-                rotated[x * height + height - y - 1] = data[y * width + x]
+                rotated[x * height + targetCol] = data[rowOffset + x]
             }
         }
         return rotated

@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -10,11 +11,16 @@ import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.net.Uri
+import android.util.Size
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
@@ -32,6 +38,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -47,14 +54,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -71,9 +84,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -92,28 +107,37 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.domain.protocol.OpticalPacketProtocol
 import com.example.domain.protocol.PacketKind
 import com.example.domain.protocol.PreparedOpticalStream
+import com.example.domain.protocol.QrCodecEngine
 import com.example.domain.protocol.QrEccLevel
+import com.example.domain.protocol.StandardQrKind
 import com.example.ui.components.InstrumentActionButton
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.SenderUiState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 @Composable
 fun SendQrScreen(
     senderState: SenderUiState,
     onPickFileUri: (Uri) -> Unit,
+    onPickMultipleFileUris: (List<Uri>) -> Unit,
     onCapturePhotoBitmap: (Bitmap) -> Unit,
     onCreateTextNote: (String, String) -> Unit,
     onLoadSampleFile: () -> Unit,
@@ -122,6 +146,9 @@ fun SendQrScreen(
     onAdvanceAutoFrame: () -> Unit,
     onFpsChange: (Int) -> Unit,
     onUpdateConfig: (Int?, QrEccLevel?) -> Unit,
+    onUpdateEncryptionPassword: (String) -> Unit,
+    onToggleAutoMaxBrightness: () -> Unit,
+    onScanNackQr: (String) -> Result<Int>,
     onToggleMissingChunkFilter: (Int) -> Unit,
     onClearMissingChunkFilter: () -> Unit,
     onNavigateToReceiveLoopback: () -> Unit,
@@ -130,6 +157,10 @@ fun SendQrScreen(
     val context = LocalContext.current
     var showTextNoteDialog by rememberSaveable { mutableStateOf(false) }
     var showPhotoCaptureDialog by rememberSaveable { mutableStateOf(false) }
+    var showStandardQrDialog by rememberSaveable { mutableStateOf(false) }
+    var showEncryptionDialog by rememberSaveable { mutableStateOf(false) }
+    var showNackScannerDialog by rememberSaveable { mutableStateOf(false) }
+
     var noteTitle by rememberSaveable { mutableStateOf("Credenziali_Nodo_Offline.txt") }
     var noteBody by rememberSaveable {
         mutableStateOf("NODE_ID=OPTI-9942-XKV\nIPV4_LOCAL=192.168.10.45\nVERIFY=SHA256_REQUIRED")
@@ -144,6 +175,27 @@ fun SendQrScreen(
         )
     }
 
+    // Automatic Maximum Screen Brightness & Keep Screen On while actively streaming QR frames
+    DisposableEffect(senderState.isPlaying, senderState.autoMaxBrightness) {
+        val activity = context as? Activity
+        val window = activity?.window
+        val shouldBoost = senderState.isPlaying && senderState.autoMaxBrightness
+        if (window != null && shouldBoost) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val params = window.attributes
+            params.screenBrightness = 1.0f
+            window.attributes = params
+        }
+        onDispose {
+            if (window != null) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                val params = window.attributes
+                params.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                window.attributes = params
+            }
+        }
+    }
+
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -151,10 +203,25 @@ fun SendQrScreen(
         showPhotoCaptureDialog = true
     }
 
+    val nackCameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasCameraPermission = granted
+        showNackScannerDialog = true
+    }
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) onPickFileUri(uri)
+    }
+
+    val multiFileZipPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            onPickMultipleFileUris(uris)
+        }
     }
 
     val imageGalleryLauncher = rememberLauncherForActivityResult(
@@ -183,6 +250,23 @@ fun SendQrScreen(
         }
     }
 
+    val handleOpenNackScanner = {
+        val grantedNow = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        hasCameraPermission = grantedNow
+        if (grantedNow) {
+            showNackScannerDialog = true
+        } else {
+            runCatching {
+                nackCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }.onFailure {
+                showNackScannerDialog = true
+            }
+        }
+    }
+
     val handleLaunchFilePicker = {
         runCatching {
             filePickerLauncher.launch("*/*")
@@ -190,6 +274,18 @@ fun SendQrScreen(
             Toast.makeText(
                 context,
                 "Selettore file non disponibile: usa Nota o Demo",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    val handleLaunchMultiZipPicker = {
+        runCatching {
+            multiFileZipPickerLauncher.launch("*/*")
+        }.onFailure {
+            Toast.makeText(
+                context,
+                "Selettore multi-file non disponibile su questo dispositivo",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -212,7 +308,6 @@ fun SendQrScreen(
             while (true) {
                 val frameNanos = withFrameNanos { it }
                 if (frameNanos - lastStepNanos >= intervalNanos) {
-                    // Align to VSync cadence without accumulating drift
                     lastStepNanos += intervalNanos
                     if (frameNanos - lastStepNanos > intervalNanos) {
                         lastStepNanos = frameNanos
@@ -227,7 +322,6 @@ fun SendQrScreen(
         val isWideLayout = maxWidth >= 600.dp
 
         if (isWideLayout) {
-            // Canonical 2-Column Workstation Layout for Tablets, Foldables & Desktop
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -244,6 +338,8 @@ fun SendQrScreen(
                         senderState = senderState,
                         onTogglePlayPause = onTogglePlayPause,
                         onStepFrame = onStepFrame,
+                        onOpenEncryptionDialog = { showEncryptionDialog = true },
+                        onOpenNackScanner = { handleOpenNackScanner() },
                         onNavigateToReceiveLoopback = onNavigateToReceiveLoopback
                     )
                 }
@@ -255,10 +351,14 @@ fun SendQrScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     SourceToolbarPanel(
+                        senderState = senderState,
                         onPickFile = { handleLaunchFilePicker() },
+                        onPickMultiZip = { handleLaunchMultiZipPicker() },
                         onCapturePhoto = { handleOpenPhotoCapture() },
                         onOpenNoteModal = { showTextNoteDialog = true },
-                        onLoadDemo = onLoadSampleFile
+                        onOpenStandardQrModal = { showStandardQrDialog = true },
+                        onLoadDemo = onLoadSampleFile,
+                        onOpenEncryptionDialog = { showEncryptionDialog = true }
                     )
 
                     senderState.stream?.let { stream ->
@@ -267,6 +367,8 @@ fun SendQrScreen(
                             stream = stream,
                             onFpsChange = onFpsChange,
                             onUpdateConfig = onUpdateConfig,
+                            onToggleAutoMaxBrightness = onToggleAutoMaxBrightness,
+                            onOpenNackScanner = { handleOpenNackScanner() },
                             onToggleMissingChunkFilter = onToggleMissingChunkFilter,
                             onClearMissingChunkFilter = onClearMissingChunkFilter
                         )
@@ -274,7 +376,6 @@ fun SendQrScreen(
                 }
             }
         } else {
-            // Compact Handheld Layout
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -289,10 +390,14 @@ fun SendQrScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     SourceToolbarPanel(
+                        senderState = senderState,
                         onPickFile = { handleLaunchFilePicker() },
+                        onPickMultiZip = { handleLaunchMultiZipPicker() },
                         onCapturePhoto = { handleOpenPhotoCapture() },
                         onOpenNoteModal = { showTextNoteDialog = true },
-                        onLoadDemo = onLoadSampleFile
+                        onOpenStandardQrModal = { showStandardQrDialog = true },
+                        onLoadDemo = onLoadSampleFile,
+                        onOpenEncryptionDialog = { showEncryptionDialog = true }
                     )
 
                     AnimatedVisibility(visible = senderState.errorMessage != null) {
@@ -318,6 +423,8 @@ fun SendQrScreen(
                         senderState = senderState,
                         onTogglePlayPause = onTogglePlayPause,
                         onStepFrame = onStepFrame,
+                        onOpenEncryptionDialog = { showEncryptionDialog = true },
+                        onOpenNackScanner = { handleOpenNackScanner() },
                         onNavigateToReceiveLoopback = onNavigateToReceiveLoopback
                     )
 
@@ -327,6 +434,8 @@ fun SendQrScreen(
                             stream = stream,
                             onFpsChange = onFpsChange,
                             onUpdateConfig = onUpdateConfig,
+                            onToggleAutoMaxBrightness = onToggleAutoMaxBrightness,
+                            onOpenNackScanner = { handleOpenNackScanner() },
                             onToggleMissingChunkFilter = onToggleMissingChunkFilter,
                             onClearMissingChunkFilter = onClearMissingChunkFilter
                         )
@@ -406,14 +515,467 @@ fun SendQrScreen(
             }
         )
     }
+
+    if (showEncryptionDialog) {
+        AesEncryptionPasswordDialog(
+            currentPassword = senderState.encryptionPassword,
+            onApplyPassword = { pass ->
+                onUpdateEncryptionPassword(pass)
+                showEncryptionDialog = false
+            },
+            onDismiss = { showEncryptionDialog = false }
+        )
+    }
+
+    if (showStandardQrDialog) {
+        UniversalStandardQrDialog(
+            onTransmitAsOptiShareStream = { title, content ->
+                showStandardQrDialog = false
+                onCreateTextNote(title, content)
+            },
+            onDismiss = { showStandardQrDialog = false }
+        )
+    }
+
+    if (showNackScannerDialog) {
+        NackScannerDialog(
+            hasCameraPermission = hasCameraPermission,
+            activeSessionId = senderState.stream?.sessionId ?: "SESSION",
+            totalChunks = senderState.stream?.dataPackets?.size ?: 4,
+            onRequestCameraPermission = {
+                runCatching { nackCameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
+            },
+            onNackScanned = { qrStr ->
+                val res = onScanNackQr(qrStr)
+                res.onSuccess { count ->
+                    Toast.makeText(
+                        context,
+                        "NACK acquisito: filtrati $count pacchetti mancanti",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    showNackScannerDialog = false
+                }.onFailure { err ->
+                    Toast.makeText(
+                        context,
+                        err.localizedMessage ?: "QR NACK non valido",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onDismiss = { showNackScannerDialog = false }
+        )
+    }
 }
 
-/**
- * In-App CameraX Photo Capture & Simulation Dialog.
- * Eliminates SecurityException / ActivityNotFoundException crashes caused by external
- * ACTION_IMAGE_CAPTURE intents when CAMERA permission is declared in AndroidManifest.xml
- * or when running inside a streaming emulator without a system camera app.
- */
+@Composable
+private fun AesEncryptionPasswordDialog(
+    currentPassword: String,
+    onApplyPassword: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var passwordInput by rememberSaveable { mutableStateOf(currentPassword) }
+    val colorScheme = MaterialTheme.colorScheme
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = colorScheme.primary)
+                Text("Crittografia AES-256-GCM", style = MaterialTheme.typography.titleLarge)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Proteggi il flusso QR con cifratura autenticata AES-256-GCM e chiave derivata PBKDF2-HMAC-SHA256 (65.536 iterazioni). Lascia vuoto per trasmettere in chiaro.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("Passphrase segreta AES-256") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("aes_password_input")
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onApplyPassword(passwordInput) },
+                modifier = Modifier.testTag("apply_aes_password_button")
+            ) {
+                Text(if (passwordInput.isBlank()) "Disattiva Cifratura" else "Attiva AES-256")
+            }
+        },
+        dismissButton = {
+            if (currentPassword.isNotBlank()) {
+                TextButton(onClick = { onApplyPassword("") }) {
+                    Text("Rimuovi Password")
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text("Annulla")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun UniversalStandardQrDialog(
+    onTransmitAsOptiShareStream: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    var selectedKind by rememberSaveable { mutableStateOf(StandardQrKind.WIFI) }
+
+    // Wi-Fi state
+    var wifiSsid by rememberSaveable { mutableStateOf("OptiShare_Lab_5G") }
+    var wifiPassword by rememberSaveable { mutableStateOf("AirGapped2026!") }
+    var wifiSecurity by rememberSaveable { mutableStateOf("WPA") }
+
+    // vCard state
+    var vcardName by rememberSaveable { mutableStateOf("Valerio Massimo") }
+    var vcardPhone by rememberSaveable { mutableStateOf("+39 340 0000000") }
+    var vcardEmail by rememberSaveable { mutableStateOf("info@optishare.org") }
+    var vcardOrg by rememberSaveable { mutableStateOf("OptiShare FOSS Lab") }
+
+    // Free text / URL state
+    var freeText by rememberSaveable { mutableStateOf("https://f-droid.org") }
+
+    val formattedPayload = remember(
+        selectedKind,
+        wifiSsid,
+        wifiPassword,
+        wifiSecurity,
+        vcardName,
+        vcardPhone,
+        vcardEmail,
+        vcardOrg,
+        freeText
+    ) {
+        when (selectedKind) {
+            StandardQrKind.WIFI -> OpticalPacketProtocol.buildWifiStandardQr(
+                ssid = wifiSsid,
+                password = wifiPassword,
+                security = wifiSecurity
+            )
+            StandardQrKind.VCARD -> OpticalPacketProtocol.buildVCardStandardQr(
+                fullName = vcardName,
+                phone = vcardPhone,
+                email = vcardEmail,
+                organization = vcardOrg
+            )
+            StandardQrKind.TEXT -> freeText.ifBlank { "OptiShare QR" }
+        }
+    }
+
+    var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(formattedPayload) {
+        qrBitmap = withContext(Dispatchers.Default) {
+            runCatching {
+                QrCodecEngine.generateQrBitmap(
+                    content = formattedPayload,
+                    sizePx = 600,
+                    eccLevel = QrEccLevel.M
+                )
+            }.getOrNull()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Generatore QR Universale (Wi-Fi / vCard / Testo)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                SegmentedSelectorBar(
+                    items = StandardQrKind.entries,
+                    selectedItem = selectedKind,
+                    onItemSelected = { selectedKind = it },
+                    labelProvider = { it.label }
+                )
+
+                qrBitmap?.let { bmp ->
+                    Box(
+                        modifier = Modifier
+                            .size(190.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White)
+                            .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                            .padding(10.dp)
+                            .testTag("standard_qr_preview_box"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "QR Standard Universale",
+                            filterQuality = FilterQuality.None,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                when (selectedKind) {
+                    StandardQrKind.WIFI -> {
+                        OutlinedTextField(
+                            value = wifiSsid,
+                            onValueChange = { wifiSsid = it },
+                            label = { Text("Nome Rete (SSID)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = wifiPassword,
+                            onValueChange = { wifiPassword = it },
+                            label = { Text("Password Wi-Fi") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        SegmentedSelectorBar(
+                            items = listOf("WPA", "WEP", "nopass"),
+                            selectedItem = wifiSecurity,
+                            onItemSelected = { wifiSecurity = it },
+                            labelProvider = {
+                                when (it) {
+                                    "WPA" -> "WPA/WPA2/WPA3"
+                                    "WEP" -> "WEP"
+                                    else -> "Aperta"
+                                }
+                            }
+                        )
+                    }
+                    StandardQrKind.VCARD -> {
+                        OutlinedTextField(
+                            value = vcardName,
+                            onValueChange = { vcardName = it },
+                            label = { Text("Nome e Cognome") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = vcardPhone,
+                            onValueChange = { vcardPhone = it },
+                            label = { Text("Telefono") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = vcardEmail,
+                            onValueChange = { vcardEmail = it },
+                            label = { Text("Email") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = vcardOrg,
+                            onValueChange = { vcardOrg = it },
+                            label = { Text("Organizzazione") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    StandardQrKind.TEXT -> {
+                        OutlinedTextField(
+                            value = freeText,
+                            onValueChange = { freeText = it },
+                            label = { Text("Testo o URL") },
+                            minLines = 3,
+                            maxLines = 5,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Questo QR rispetta lo standard universale ed è scansionabile da qualsiasi fotocamera Android/iOS senza app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val fileName = when (selectedKind) {
+                        StandardQrKind.WIFI -> "WiFi_${wifiSsid.ifBlank { "Rete" }}.txt"
+                        StandardQrKind.VCARD -> "${vcardName.ifBlank { "Contatto" }}.vcf"
+                        StandardQrKind.TEXT -> "Nota_QR_Standard.txt"
+                    }
+                    onTransmitAsOptiShareStream(fileName, formattedPayload)
+                }
+            ) {
+                Text("Invia anche in OptiShare")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Chiudi")
+            }
+        }
+    )
+}
+
+@Composable
+private fun NackScannerDialog(
+    hasCameraPermission: Boolean,
+    activeSessionId: String,
+    totalChunks: Int,
+    onRequestCameraPermission: () -> Unit,
+    onNackScanned: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val colorScheme = MaterialTheme.colorScheme
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            analysisExecutor.shutdown()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Scansiona QR Inverso NACK",
+                style = MaterialTheme.typography.titleLarge
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Inquadra il codice QR NACK mostrato sul dispositivo ricevente per trasmettere solo i pacchetti mancanti.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+
+                if (hasCameraPermission) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(210.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black)
+                            .border(1.dp, colorScheme.primary, RoundedCornerShape(12.dp))
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                val previewView = PreviewView(ctx).apply {
+                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                }
+                                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                                cameraProviderFuture.addListener({
+                                    runCatching {
+                                        val cameraProvider = cameraProviderFuture.get()
+                                        val preview = Preview.Builder().build().also {
+                                            it.setSurfaceProvider(previewView.surfaceProvider)
+                                        }
+                                        val resolutionSelector = ResolutionSelector.Builder()
+                                            .setResolutionStrategy(
+                                                ResolutionStrategy(
+                                                    Size(1280, 720),
+                                                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                                )
+                                            )
+                                            .build()
+                                        val imageAnalysis = ImageAnalysis.Builder()
+                                            .setResolutionSelector(resolutionSelector)
+                                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                            .build()
+
+                                        var handled = false
+                                        imageAnalysis.setAnalyzer(analysisExecutor) { imageProxy ->
+                                            try {
+                                                if (!handled) {
+                                                    val decoded = QrCodecEngine.decodeFromImageProxy(imageProxy)
+                                                    if (!decoded.isNullOrBlank() && decoded.startsWith("QBF1_NACK|")) {
+                                                        handled = true
+                                                        previewView.post {
+                                                            onNackScanned(decoded)
+                                                        }
+                                                    }
+                                                }
+                                            } finally {
+                                                imageProxy.close()
+                                            }
+                                        }
+                                        cameraProvider.unbindAll()
+                                        cameraProvider.bindToLifecycle(
+                                            lifecycleOwner,
+                                            CameraSelector.DEFAULT_BACK_CAMERA,
+                                            preview,
+                                            imageAnalysis
+                                        )
+                                    }
+                                }, ContextCompat.getMainExecutor(ctx))
+                                previewView
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = onRequestCameraPermission,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Autorizza Fotocamera per NACK")
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        val sampleMissing = listOf(0, (totalChunks - 1).coerceAtLeast(0)).distinct()
+                        val simulatedNack = OpticalPacketProtocol.encodeNackQrString(
+                            sessionId = activeSessionId,
+                            missingIndices = sampleMissing
+                        )
+                        onNackScanned(simulatedNack)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("simulate_nack_scan_button")
+                ) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Simula Scansione NACK (Test Rapido)")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annulla")
+            }
+        }
+    )
+}
+
 @Composable
 private fun InAppPhotoCaptureDialog(
     hasCameraPermission: Boolean,
@@ -569,24 +1131,18 @@ private fun InAppPhotoCaptureDialog(
     )
 }
 
-/**
- * Generates a clean, deterministic camera test snapshot bitmap when running inside an
- * emulator or simulation environment where the hardware camera feed is unavailable.
- */
 private fun generateSimulatedCameraBitmap(): Bitmap {
     val width = 400
     val height = 300
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = AndroidCanvas(bitmap)
 
-    // Background
     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.rgb(24, 34, 52)
         style = Paint.Style.FILL
     }
     canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-    // Calibration Grid
     val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.argb(50, 170, 199, 255)
         strokeWidth = 2f
@@ -598,7 +1154,6 @@ private fun generateSimulatedCameraBitmap(): Bitmap {
         canvas.drawLine(0f, y.toFloat(), width.toFloat(), y.toFloat(), gridPaint)
     }
 
-    // Accent Circle Target
     val targetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.rgb(59, 130, 246)
         style = Paint.Style.STROKE
@@ -606,7 +1161,6 @@ private fun generateSimulatedCameraBitmap(): Bitmap {
     }
     canvas.drawCircle(width / 2f, height / 2f, 70f, targetPaint)
 
-    // Text Stamp
     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
         textSize = 22f
@@ -623,11 +1177,18 @@ private fun generateSimulatedCameraBitmap(): Bitmap {
 
 @Composable
 private fun SourceToolbarPanel(
+    senderState: SenderUiState,
     onPickFile: () -> Unit,
+    onPickMultiZip: () -> Unit,
     onCapturePhoto: () -> Unit,
     onOpenNoteModal: () -> Unit,
-    onLoadDemo: () -> Unit
+    onOpenStandardQrModal: () -> Unit,
+    onLoadDemo: () -> Unit,
+    onOpenEncryptionDialog: () -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val isEncrypted = senderState.encryptionPassword.isNotBlank()
+
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -639,20 +1200,50 @@ private fun SourceToolbarPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Sorgente file da condividere",
+                    text = "Sorgente file & Strumenti Offline",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = colorScheme.onSurface
                 )
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "GZIP · XOR FEC",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                    Surface(
+                        onClick = onOpenEncryptionDialog,
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isEncrypted) colorScheme.tertiaryContainer else colorScheme.surfaceVariant,
+                        modifier = Modifier.testTag("toggle_aes_encryption_chip")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
+                                contentDescription = null,
+                                tint = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = if (isEncrypted) "AES-256 ON" else "AES-256 OFF",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = "GZIP · XOR FEC",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
 
@@ -666,8 +1257,16 @@ private fun SourceToolbarPanel(
                     onClick = onPickFile,
                     isPrimary = true,
                     modifier = Modifier
-                        .weight(1.1f)
+                        .weight(1f)
                         .testTag("pick_file_button")
+                )
+                InstrumentActionButton(
+                    label = "ZIP Multi",
+                    icon = Icons.Default.FolderZip,
+                    onClick = onPickMultiZip,
+                    modifier = Modifier
+                        .weight(1.05f)
+                        .testTag("pick_multi_zip_button")
                 )
                 InstrumentActionButton(
                     label = "Foto",
@@ -677,6 +1276,12 @@ private fun SourceToolbarPanel(
                         .weight(1f)
                         .testTag("capture_photo_sender_button")
                 )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 InstrumentActionButton(
                     label = "Nota",
                     icon = Icons.Default.EditNote,
@@ -684,6 +1289,14 @@ private fun SourceToolbarPanel(
                     modifier = Modifier
                         .weight(1f)
                         .testTag("create_note_button")
+                )
+                InstrumentActionButton(
+                    label = "QR Std",
+                    icon = Icons.Default.QrCode2,
+                    onClick = onOpenStandardQrModal,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("open_standard_qr_button")
                 )
                 InstrumentActionButton(
                     label = "Demo",
@@ -703,6 +1316,8 @@ private fun OpticalStagePanel(
     senderState: SenderUiState,
     onTogglePlayPause: () -> Unit,
     onStepFrame: (Int) -> Unit,
+    onOpenEncryptionDialog: () -> Unit,
+    onOpenNackScanner: () -> Unit,
     onNavigateToReceiveLoopback: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -723,14 +1338,13 @@ private fun OpticalStagePanel(
                     modifier = Modifier.size(32.dp)
                 )
                 Text(
-                    text = "Compressione GZIP e calcolo parità XOR...",
+                    text = "Generazione QR multi-core, GZIP e parità XOR...",
                     style = MaterialTheme.typography.labelMedium,
                     color = colorScheme.onSurfaceVariant
                 )
             }
         }
     } else if (stream != null && bitmaps.isNotEmpty()) {
-        // Pre-cache ImageBitmaps once per stream so 120Hz frame updates do zero allocation
         val cachedImageBitmaps = remember(bitmaps) {
             bitmaps.map { it.asImageBitmap() }
         }
@@ -755,21 +1369,36 @@ private fun OpticalStagePanel(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                // Top Telemetry Header Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = stream.fileName,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (stream.isEncrypted) {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = "Cifrato AES-256-GCM",
+                                    tint = colorScheme.tertiary,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { onOpenEncryptionDialog() }
+                                )
+                            }
+                        }
                         Text(
-                            text = stream.fileName,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "ID ${stream.sessionId} · ${stream.originalBytes.size} B → ${stream.compressedBytes.size} B GZIP",
+                            text = "ID ${stream.sessionId} · ${stream.originalBytes.size} B → ${stream.compressedBytes.size} B" +
+                                if (stream.isEncrypted) " (AES-256)" else " (GZIP)",
                             style = MaterialTheme.typography.labelSmall,
                             color = colorScheme.onSurfaceVariant
                         )
@@ -798,7 +1427,6 @@ private fun OpticalStagePanel(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Precision White Calibration Pad for Maximum Camera Contrast
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.86f)
@@ -818,21 +1446,16 @@ private fun OpticalStagePanel(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Subtle Technical Corner Fiducials on the white pad
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val tick = 8.dp.toPx()
                         val stroke = 1.2.dp.toPx()
                         val markColor = Color(0xFF18181B).copy(alpha = 0.35f)
-                        // Top-left
                         drawLine(markColor, Offset(0f, 0f), Offset(tick, 0f), stroke)
                         drawLine(markColor, Offset(0f, 0f), Offset(0f, tick), stroke)
-                        // Top-right
                         drawLine(markColor, Offset(size.width - tick, 0f), Offset(size.width, 0f), stroke)
                         drawLine(markColor, Offset(size.width, 0f), Offset(size.width, tick), stroke)
-                        // Bottom-left
                         drawLine(markColor, Offset(0f, size.height - tick), Offset(0f, size.height), stroke)
                         drawLine(markColor, Offset(0f, size.height), Offset(tick, size.height), stroke)
-                        // Bottom-right
                         drawLine(markColor, Offset(size.width - tick, size.height), Offset(size.width, size.height), stroke)
                         drawLine(markColor, Offset(size.width, size.height - tick), Offset(size.width, size.height), stroke)
                     }
@@ -840,7 +1463,6 @@ private fun OpticalStagePanel(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Frame Progress Scrubber & Readout (120Hz Smooth Interpolated)
                 LinearProgressIndicator(
                     progress = { smoothProgress },
                     modifier = Modifier
@@ -857,16 +1479,18 @@ private fun OpticalStagePanel(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "FRAME %02d/%02d · CRC32 %s".format(
+                        text = "FRAME %02d/%02d · %.1f KB/s · Ciclo %.1fs".format(
+                            Locale.US,
                             safeIndex + 1,
                             cachedImageBitmaps.size,
-                            currentPacket.crc32Hex.uppercase()
+                            senderState.theoreticalThroughputKbps,
+                            senderState.estimatedCycleSeconds
                         ),
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${senderState.fps} FPS · 120Hz VSync · ECC ${senderState.eccLevel.name}",
+                        text = "${senderState.fps} FPS · 120Hz VSync",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurface
                     )
@@ -876,7 +1500,6 @@ private fun OpticalStagePanel(
                 HorizontalDivider(color = colorScheme.outlineVariant)
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Unified Transport & Loopback Control Bar
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -921,6 +1544,15 @@ private fun OpticalStagePanel(
                     }
 
                     InstrumentActionButton(
+                        label = "NACK",
+                        icon = Icons.Default.QrCodeScanner,
+                        onClick = onOpenNackScanner,
+                        modifier = Modifier
+                            .weight(0.95f)
+                            .testTag("scan_nack_from_sender_button")
+                    )
+
+                    InstrumentActionButton(
                         label = "Loopback",
                         icon = Icons.Default.VerifiedUser,
                         onClick = onNavigateToReceiveLoopback,
@@ -941,13 +1573,15 @@ private fun InspectorTabbedPanel(
     stream: PreparedOpticalStream,
     onFpsChange: (Int) -> Unit,
     onUpdateConfig: (Int?, QrEccLevel?) -> Unit,
+    onToggleAutoMaxBrightness: () -> Unit,
+    onOpenNackScanner: () -> Unit,
     onToggleMissingChunkFilter: (Int) -> Unit,
     onClearMissingChunkFilter: () -> Unit
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     var activeTab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("Telemetria", "Calibrazione", "Filtro PKT")
+    val tabs = listOf("Telemetria", "Calibrazione", "Filtro NACK")
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -960,7 +1594,7 @@ private fun InspectorTabbedPanel(
                 onItemSelected = { activeTab = it },
                 labelProvider = { idx ->
                     if (idx == 2 && senderState.selectedMissingDataIndices.isNotEmpty()) {
-                        "Filtro (${senderState.selectedMissingDataIndices.size})"
+                        "NACK (${senderState.selectedMissingDataIndices.size})"
                     } else {
                         tabs[idx]
                     }
@@ -984,7 +1618,7 @@ private fun InspectorTabbedPanel(
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCell(
-                            label = "Compresso GZIP",
+                            label = if (stream.isEncrypted) "GZIP + AES-256" else "Compresso GZIP",
                             value = "${stream.compressedBytes.size} B ($ratio)",
                             modifier = Modifier.weight(1f)
                         )
@@ -995,13 +1629,14 @@ private fun InspectorTabbedPanel(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         TelemetryMetricCell(
-                            label = "Pacchetti Dati",
-                            value = "${stream.dataPackets.size} PKT",
+                            label = "Throughput Ottico",
+                            value = String.format(Locale.US, "%.1f KB/s", senderState.theoreticalThroughputKbps),
+                            valueColor = colorScheme.tertiary,
                             modifier = Modifier.weight(1f)
                         )
                         TelemetryMetricCell(
-                            label = "Parità XOR (FEC)",
-                            value = "${stream.parityPackets.size} blocchi",
+                            label = "Codifica Multi-Core",
+                            value = "${senderState.encodingDurationMs} ms (${stream.allOrderedPackets.size} QR)",
                             valueColor = colorScheme.primary,
                             modifier = Modifier.weight(1f)
                         )
@@ -1077,6 +1712,41 @@ private fun InspectorTabbedPanel(
                         )
                     }
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.BrightnessHigh,
+                                contentDescription = null,
+                                tint = colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Luminosità Massima Automatica",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = "Imposta il display al 100% durante l'invio QR",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = senderState.autoMaxBrightness,
+                            onCheckedChange = { onToggleAutoMaxBrightness() },
+                            modifier = Modifier.testTag("switch_auto_max_brightness")
+                        )
+                    }
+
                     Text(
                         text = "Densità payload per ciascun QR",
                         style = MaterialTheme.typography.bodyMedium
@@ -1113,14 +1783,34 @@ private fun InspectorTabbedPanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Seleziona i pacchetti mancanti da ritrasmettere:",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "Scansiona il QR NACK del ricevitore o tocca i pacchetti da ritrasmettere:",
+                            style = MaterialTheme.typography.bodySmall,
                             color = colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
                         )
-                        if (senderState.selectedMissingDataIndices.isNotEmpty()) {
+                        FilledTonalButton(
+                            onClick = onOpenNackScanner,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Scansiona NACK", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    if (senderState.selectedMissingDataIndices.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Filtro attivo: ${senderState.selectedMissingDataIndices.size} su ${stream.dataPackets.size} PKT",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = colorScheme.primary
+                            )
                             TextButton(onClick = onClearMissingChunkFilter) {
-                                Text("Tutti (${stream.dataPackets.size})")
+                                Text("Ripristina Tutti (${stream.dataPackets.size})")
                             }
                         }
                     }

@@ -4,10 +4,18 @@ import androidx.compose.runtime.Immutable
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
 import java.util.zip.CRC32
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.ceil
@@ -31,6 +39,12 @@ enum class ChunkReceptionState {
     RECOVERED_PARITY
 }
 
+enum class StandardQrKind(val label: String) {
+    WIFI("Wi-Fi"),
+    VCARD("vCard Contatto"),
+    TEXT("Testo / URL")
+}
+
 @Immutable
 data class OpticalPacket(
     val sessionId: String,
@@ -46,7 +60,8 @@ data class OpticalPacket(
     val originalSizeBytes: Long,
     val compressedSizeBytes: Long,
     val payload: ByteArray,
-    val dataChunkCrcsInBlock: List<String> = emptyList() // Used by PARITY packet to validate reconstructed chunk
+    val dataChunkCrcsInBlock: List<String> = emptyList(), // Used by PARITY packet to validate reconstructed chunk
+    val isEncrypted: Boolean = false
 ) {
     val displayNumber: String
         get() = if (kind == PacketKind.DATA) "D#${index + 1}" else "P#${index + 1}"
@@ -66,7 +81,8 @@ data class PreparedOpticalStream(
     val dataPackets: List<OpticalPacket>,
     val parityPackets: List<OpticalPacket>,
     val allOrderedPackets: List<OpticalPacket>,
-    val encodedQrStrings: List<String>
+    val encodedQrStrings: List<String>,
+    val isEncrypted: Boolean = false
 )
 
 @Immutable
@@ -80,12 +96,25 @@ data class ReconstructedFileResult(
     val actualSha256: String,
     val integrityVerified: Boolean,
     val totalDataChunks: Int,
-    val parityRecoveredCount: Int
+    val parityRecoveredCount: Int,
+    val wasEncrypted: Boolean = false
+)
+
+@Immutable
+data class OpticalNackRequest(
+    val sessionId: String,
+    val missingDataIndices: Set<Int>
 )
 
 object OpticalPacketProtocol {
     private const val MAGIC_HEADER = "QBF1"
+    private const val NACK_HEADER = "QBF1_NACK"
     private const val FIELD_SEP = "|"
+    private const val ENCRYPTED_MIME_SUFFIX = ";enc=aes256gcm"
+    private const val PBKDF2_ITERATIONS = 65_536
+    private const val SALT_BYTES = 16
+    private const val GCM_IV_BYTES = 12
+    private const val GCM_TAG_BITS = 128
 
     fun sha256Hex(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -120,8 +149,162 @@ object OpticalPacketProtocol {
     }
 
     /**
-     * Prepares a complete multi-frame QR stream with GZIP compression, CRC32 per packet,
-     * full-file SHA-256, and XOR parity packets (1 parity packet per [blockSize] data packets).
+     * Packs multiple files into a single standard ZIP byte array in memory.
+     */
+    fun createZipArchive(entries: List<Pair<String, ByteArray>>): ByteArray {
+        val bos = ByteArrayOutputStream()
+        val usedNames = mutableSetOf<String>()
+        ZipOutputStream(bos).use { zos ->
+            zos.setLevel(6)
+            for ((rawName, content) in entries) {
+                val baseName = rawName.replace("/", "_").replace("\\", "_").ifBlank { "file.bin" }
+                var uniqueName = baseName
+                var counter = 2
+                while (!usedNames.add(uniqueName)) {
+                    val dot = baseName.lastIndexOf('.')
+                    uniqueName = if (dot > 0) {
+                        "${baseName.substring(0, dot)}_$counter${baseName.substring(dot)}"
+                    } else {
+                        "${baseName}_$counter"
+                    }
+                    counter++
+                }
+                val entry = ZipEntry(uniqueName)
+                entry.size = content.size.toLong()
+                zos.putNextEntry(entry)
+                zos.write(content)
+                zos.closeEntry()
+            }
+        }
+        return bos.toByteArray()
+    }
+
+    /**
+     * Encrypts [plainBytes] using AES-256-GCM with a key derived from [password] via PBKDF2-HMAC-SHA256.
+     * Output layout: [16-byte Salt][12-byte IV][Ciphertext + 16-byte GCM Tag]
+     */
+    fun encryptAes256Gcm(plainBytes: ByteArray, password: String): ByteArray {
+        val random = SecureRandom()
+        val salt = ByteArray(SALT_BYTES).also { random.nextBytes(it) }
+        val iv = ByteArray(GCM_IV_BYTES).also { random.nextBytes(it) }
+
+        val keySpec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, 256)
+        val secretKeyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val keyBytes = secretKeyFactory.generateSecret(keySpec).encoded
+        keySpec.clearPassword()
+
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
+        val cipherBytes = cipher.doFinal(plainBytes)
+
+        val out = ByteArray(SALT_BYTES + GCM_IV_BYTES + cipherBytes.size)
+        System.arraycopy(salt, 0, out, 0, SALT_BYTES)
+        System.arraycopy(iv, 0, out, SALT_BYTES, GCM_IV_BYTES)
+        System.arraycopy(cipherBytes, 0, out, SALT_BYTES + GCM_IV_BYTES, cipherBytes.size)
+        return out
+    }
+
+    /**
+     * Decrypts an AES-256-GCM payload produced by [encryptAes256Gcm].
+     */
+    fun decryptAes256Gcm(encryptedPayload: ByteArray, password: String): ByteArray {
+        require(encryptedPayload.size > SALT_BYTES + GCM_IV_BYTES + 16) {
+            "Payload cifrato troppo corto o danneggiato"
+        }
+        val salt = encryptedPayload.copyOfRange(0, SALT_BYTES)
+        val iv = encryptedPayload.copyOfRange(SALT_BYTES, SALT_BYTES + GCM_IV_BYTES)
+        val cipherBytes = encryptedPayload.copyOfRange(SALT_BYTES + GCM_IV_BYTES, encryptedPayload.size)
+
+        val keySpec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, 256)
+        val secretKeyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val keyBytes = secretKeyFactory.generateSecret(keySpec).encoded
+        keySpec.clearPassword()
+
+        val secretKey = SecretKeySpec(keyBytes, "AES")
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_BITS, iv))
+        return cipher.doFinal(cipherBytes)
+    }
+
+    fun isEncryptedMimeType(mimeType: String): Boolean {
+        return mimeType.endsWith(ENCRYPTED_MIME_SUFFIX, ignoreCase = true)
+    }
+
+    fun stripEncryptedMimeSuffix(mimeType: String): String {
+        return if (isEncryptedMimeType(mimeType)) {
+            mimeType.dropLast(ENCRYPTED_MIME_SUFFIX.length).ifBlank { "application/octet-stream" }
+        } else {
+            mimeType
+        }
+    }
+
+    /**
+     * Encodes a compact Reverse NACK QR string (`QBF1_NACK|<sessionId>|<idx1,idx2,...>`)
+     * so the receiver can optically tell the sender which data packets are still missing.
+     */
+    fun encodeNackQrString(sessionId: String, missingIndices: Collection<Int>): String {
+        val sortedJoined = missingIndices.sorted().joinToString(",")
+        return "$NACK_HEADER$FIELD_SEP${sessionId.trim()}$FIELD_SEP$sortedJoined"
+    }
+
+    /**
+     * Parses a Reverse NACK QR string scanned by the sender.
+     */
+    fun decodeNackQrString(qrString: String): Result<OpticalNackRequest> {
+        return runCatching {
+            val parts = qrString.trim().split(FIELD_SEP)
+            require(parts.size == 3 && parts[0] == NACK_HEADER) {
+                "QR non riconosciuto come richiesta NACK OptiShare (QBF1_NACK)"
+            }
+            val sessionId = parts[1].trim()
+            val indices = if (parts[2].isBlank()) {
+                emptySet()
+            } else {
+                parts[2].split(",").mapNotNull { it.trim().toIntOrNull() }.filter { it >= 0 }.toSet()
+            }
+            require(indices.isNotEmpty()) {
+                "Nessun indice pacchetto mancante specificato nel QR NACK"
+            }
+            OpticalNackRequest(sessionId = sessionId, missingDataIndices = indices)
+        }
+    }
+
+    /**
+     * Formats universal standard QR strings readable by any OS camera (Wi-Fi, vCard 3.0, Text/URI).
+     */
+    fun buildWifiStandardQr(ssid: String, password: String, security: String = "WPA", hidden: Boolean = false): String {
+        fun escapeWifi(v: String) = v
+            .replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace(":", "\\:")
+        val auth = if (password.isBlank()) "nopass" else security
+        return "WIFI:T:$auth;S:${escapeWifi(ssid.trim())};P:${escapeWifi(password)};H:${if (hidden) "true" else "false"};;"
+    }
+
+    fun buildVCardStandardQr(
+        fullName: String,
+        phone: String,
+        email: String,
+        organization: String = "",
+        website: String = ""
+    ): String {
+        return buildString {
+            appendLine("BEGIN:VCARD")
+            appendLine("VERSION:3.0")
+            appendLine("FN:${fullName.trim()}")
+            if (organization.isNotBlank()) appendLine("ORG:${organization.trim()}")
+            if (phone.isNotBlank()) appendLine("TEL;TYPE=CELL:${phone.trim()}")
+            if (email.isNotBlank()) appendLine("EMAIL:${email.trim()}")
+            if (website.isNotBlank()) appendLine("URL:${website.trim()}")
+            append("END:VCARD")
+        }
+    }
+
+    /**
+     * Prepares a complete multi-frame QR stream with GZIP compression, optional AES-256-GCM encryption,
+     * CRC32 per packet, full-file SHA-256, and XOR parity packets (1 parity packet per [blockSize] data packets).
      */
     fun prepareStream(
         fileName: String,
@@ -129,27 +312,36 @@ object OpticalPacketProtocol {
         rawBytes: ByteArray,
         chunkSize: Int = 400,
         blockSize: Int = 4,
-        eccLevel: QrEccLevel = QrEccLevel.M
+        eccLevel: QrEccLevel = QrEccLevel.M,
+        encryptionPassword: String? = null
     ): PreparedOpticalStream {
         val sessionId = UUID.randomUUID().toString().substring(0, 8).uppercase()
         val fileSha256 = sha256Hex(rawBytes)
-        val compressedBytes = compressGzip(rawBytes)
+        val gzippedBytes = compressGzip(rawBytes)
+        val useEncryption = !encryptionPassword.isNullOrBlank()
+        val streamBytes = if (useEncryption) {
+            encryptAes256Gcm(gzippedBytes, encryptionPassword!!)
+        } else {
+            gzippedBytes
+        }
+
         val safeChunkSize = chunkSize.coerceIn(120, 900)
         val safeBlockSize = blockSize.coerceIn(2, 8)
 
-        val totalDataChunks = ceil(compressedBytes.size.toDouble() / safeChunkSize.toDouble())
+        val totalDataChunks = ceil(streamBytes.size.toDouble() / safeChunkSize.toDouble())
             .toInt()
             .coerceAtLeast(1)
 
         val sanitizedName = fileName.replace("|", "_").replace("\n", " ").take(64).ifBlank { "file.bin" }
-        val sanitizedMime = mimeType.replace("|", "_").take(40).ifBlank { "application/octet-stream" }
+        val cleanBaseMime = stripEncryptedMimeSuffix(mimeType.replace("|", "_").take(40).ifBlank { "application/octet-stream" })
+        val wireMime = if (useEncryption) "$cleanBaseMime$ENCRYPTED_MIME_SUFFIX" else cleanBaseMime
 
         val dataPackets = mutableListOf<OpticalPacket>()
         for (i in 0 until totalDataChunks) {
             val start = i * safeChunkSize
-            val end = min(start + safeChunkSize, compressedBytes.size)
+            val end = min(start + safeChunkSize, streamBytes.size)
             val slice = if (start < end) {
-                compressedBytes.copyOfRange(start, end)
+                streamBytes.copyOfRange(start, end)
             } else {
                 ByteArray(0)
             }
@@ -165,10 +357,11 @@ object OpticalPacketProtocol {
                     crc32Hex = crc,
                     fileSha256 = fileSha256,
                     fileName = sanitizedName,
-                    mimeType = sanitizedMime,
+                    mimeType = wireMime,
                     originalSizeBytes = rawBytes.size.toLong(),
-                    compressedSizeBytes = compressedBytes.size.toLong(),
-                    payload = slice
+                    compressedSizeBytes = streamBytes.size.toLong(),
+                    payload = slice,
+                    isEncrypted = useEncryption
                 )
             )
         }
@@ -210,11 +403,12 @@ object OpticalPacketProtocol {
                         crc32Hex = parityCrc,
                         fileSha256 = fileSha256,
                         fileName = sanitizedName,
-                        mimeType = sanitizedMime,
+                        mimeType = wireMime,
                         originalSizeBytes = rawBytes.size.toLong(),
-                        compressedSizeBytes = compressedBytes.size.toLong(),
+                        compressedSizeBytes = streamBytes.size.toLong(),
                         payload = xorBuffer,
-                        dataChunkCrcsInBlock = memberCrcs
+                        dataChunkCrcsInBlock = memberCrcs,
+                        isEncrypted = useEncryption
                     )
                 )
             }
@@ -237,9 +431,9 @@ object OpticalPacketProtocol {
         return PreparedOpticalStream(
             sessionId = sessionId,
             fileName = sanitizedName,
-            mimeType = sanitizedMime,
+            mimeType = cleanBaseMime,
             originalBytes = rawBytes,
-            compressedBytes = compressedBytes,
+            compressedBytes = streamBytes,
             fileSha256 = fileSha256,
             chunkSize = safeChunkSize,
             blockSize = safeBlockSize,
@@ -247,7 +441,8 @@ object OpticalPacketProtocol {
             dataPackets = dataPackets,
             parityPackets = parityPackets,
             allOrderedPackets = interleaved,
-            encodedQrStrings = encodedStrings
+            encodedQrStrings = encodedStrings,
+            isEncrypted = useEncryption
         )
     }
 
@@ -302,7 +497,7 @@ object OpticalPacketProtocol {
             val expectedCrc = parts[7].lowercase()
             val fileSha256 = parts[8].lowercase()
             val fileName = parts[9]
-            val mimeType = parts[10]
+            val wireMimeType = parts[10]
             val originalSize = parts[11].toLong()
             val compressedSize = parts[12].toLong()
             val memberCrcs = if (parts[13].isBlank()) emptyList() else parts[13].split(",")
@@ -323,11 +518,12 @@ object OpticalPacketProtocol {
                 crc32Hex = expectedCrc,
                 fileSha256 = fileSha256,
                 fileName = fileName,
-                mimeType = mimeType,
+                mimeType = wireMimeType,
                 originalSizeBytes = originalSize,
                 compressedSizeBytes = compressedSize,
                 payload = payload,
-                dataChunkCrcsInBlock = memberCrcs
+                dataChunkCrcsInBlock = memberCrcs,
+                isEncrypted = isEncryptedMimeType(wireMimeType)
             )
         }
     }
@@ -388,6 +584,7 @@ object OpticalPacketProtocol {
 
     /**
      * Reconstructs the original file once all data chunks (0 until totalDataChunks) are present.
+     * Supports transparent AES-256-GCM decryption when [decryptionPassword] is provided for encrypted streams.
      */
     fun reconstructAndVerifyFile(
         sessionId: String,
@@ -396,34 +593,52 @@ object OpticalPacketProtocol {
         expectedSha256: String,
         totalDataChunks: Int,
         receivedDataPayloads: Map<Int, ByteArray>,
-        parityRecoveredIndices: Set<Int>
+        parityRecoveredIndices: Set<Int>,
+        decryptionPassword: String? = null
     ): Result<ReconstructedFileResult> {
         return runCatching {
             require(receivedDataPayloads.size == totalDataChunks) {
                 "Pacchetti incompleti: ricevuti ${receivedDataPayloads.size} su $totalDataChunks"
             }
-            val compressedBos = ByteArrayOutputStream()
+            val assembledBos = ByteArrayOutputStream()
             for (i in 0 until totalDataChunks) {
                 val chunk = receivedDataPayloads[i]
                     ?: throw IllegalStateException("Pacchetto #$i mancante")
-                compressedBos.write(chunk)
+                assembledBos.write(chunk)
             }
-            val compressedBytes = compressedBos.toByteArray()
-            val decompressedBytes = decompressGzip(compressedBytes)
+            val assembledBytes = assembledBos.toByteArray()
+            val isEncrypted = isEncryptedMimeType(mimeType)
+            val cleanMimeType = stripEncryptedMimeSuffix(mimeType)
+
+            val gzipBytes = if (isEncrypted) {
+                require(!decryptionPassword.isNullOrBlank()) {
+                    "Password AES-256 richiesta per decifrare questo trasferimento"
+                }
+                try {
+                    decryptAes256Gcm(assembledBytes, decryptionPassword!!)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("Password errata o autenticazione AES-256-GCM fallita")
+                }
+            } else {
+                assembledBytes
+            }
+
+            val decompressedBytes = decompressGzip(gzipBytes)
             val actualSha256 = sha256Hex(decompressedBytes)
             val verified = actualSha256.equals(expectedSha256, ignoreCase = true)
 
             ReconstructedFileResult(
                 sessionId = sessionId,
                 fileName = fileName,
-                mimeType = mimeType,
+                mimeType = cleanMimeType,
                 rawBytes = decompressedBytes,
-                compressedSizeBytes = compressedBytes.size.toLong(),
+                compressedSizeBytes = assembledBytes.size.toLong(),
                 expectedSha256 = expectedSha256,
                 actualSha256 = actualSha256,
                 integrityVerified = verified,
                 totalDataChunks = totalDataChunks,
-                parityRecoveredCount = parityRecoveredIndices.size
+                parityRecoveredCount = parityRecoveredIndices.size,
+                wasEncrypted = isEncrypted
             )
         }
     }

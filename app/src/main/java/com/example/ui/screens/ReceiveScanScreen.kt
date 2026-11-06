@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -12,6 +13,7 @@ import android.os.VibratorManager
 import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -24,8 +26,10 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +38,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -47,23 +52,29 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.ImageSearch
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,10 +85,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -96,6 +110,7 @@ import com.example.viewmodel.ReceiverUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import java.util.concurrent.Executors
 
 @Composable
@@ -104,6 +119,9 @@ fun ReceiveScanScreen(
     onQrScanned: (String) -> Boolean,
     onResetSession: () -> Unit,
     onStartLoopbackSimulation: () -> Unit,
+    onGenerateNackQr: () -> Unit,
+    onDismissNackQr: () -> Unit,
+    onSubmitDecryptionPassword: (String) -> Unit,
     onRetransmitCompletedRecord: (TransferRecordEntity) -> Unit,
     onOpenVault: () -> Unit,
     modifier: Modifier = Modifier
@@ -202,7 +220,16 @@ fun ReceiveScanScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    AssemblyMatrixInstrumentPanel(receiverState = receiverState)
+                    if (receiverState.awaitingDecryptionPassword) {
+                        AesDecryptionUnlockPanel(
+                            receiverState = receiverState,
+                            onSubmitPassword = onSubmitDecryptionPassword
+                        )
+                    }
+                    AssemblyMatrixInstrumentPanel(
+                        receiverState = receiverState,
+                        onGenerateNackQr = onGenerateNackQr
+                    )
                     VerifiedResultInstrumentPanel(
                         receiverState = receiverState,
                         onRetransmitCompletedRecord = onRetransmitCompletedRecord,
@@ -249,18 +276,37 @@ fun ReceiveScanScreen(
                         }
                     )
 
+                    if (receiverState.awaitingDecryptionPassword) {
+                        AesDecryptionUnlockPanel(
+                            receiverState = receiverState,
+                            onSubmitPassword = onSubmitDecryptionPassword
+                        )
+                    }
+
                     VerifiedResultInstrumentPanel(
                         receiverState = receiverState,
                         onRetransmitCompletedRecord = onRetransmitCompletedRecord,
                         onOpenVault = onOpenVault
                     )
 
-                    AssemblyMatrixInstrumentPanel(receiverState = receiverState)
+                    AssemblyMatrixInstrumentPanel(
+                        receiverState = receiverState,
+                        onGenerateNackQr = onGenerateNackQr
+                    )
 
                     Spacer(modifier = Modifier.height(100.dp))
                 }
             }
         }
+    }
+
+    receiverState.nackQrBitmap?.let { nackBmp ->
+        ReverseNackQrModal(
+            sessionId = receiverState.activeSessionId ?: "",
+            missingIndices = receiverState.missingDataChunkIndices,
+            nackBitmap = nackBmp,
+            onDismiss = onDismissNackQr
+        )
     }
 
     if (showResetConfirmDialog) {
@@ -292,6 +338,137 @@ fun ReceiveScanScreen(
 }
 
 @Composable
+private fun AesDecryptionUnlockPanel(
+    receiverState: ReceiverUiState,
+    onSubmitPassword: (String) -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    var password by rememberSaveable { mutableStateOf("") }
+
+    OptiShareCard(
+        isHighlighted = true,
+        accentTint = colorScheme.secondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("aes_decryption_unlock_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = colorScheme.secondary)
+                Text(
+                    text = "Decifra Stream AES-256-GCM",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Text(
+                text = "Tutti i ${receiverState.totalDataChunks} pacchetti di '${receiverState.fileName}' sono stati ricevuti. Inserisci la passphrase AES-256 per decifrare e verificare l'hash SHA-256.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Passphrase AES-256") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("receiver_aes_password_input")
+            )
+            receiverState.decryptionError?.let { err ->
+                Text(
+                    text = err,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorScheme.error
+                )
+            }
+            Button(
+                onClick = { onSubmitPassword(password) },
+                enabled = password.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("receiver_decrypt_submit_button")
+            ) {
+                Text("Decifra e Verifica SHA-256")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReverseNackQrModal(
+    sessionId: String,
+    missingIndices: List<Int>,
+    nackBitmap: Bitmap,
+    onDismiss: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "QR Inverso NACK (${missingIndices.size} Mancanti)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "Mostra questo codice QR al dispositivo mittente (pulsante 'NACK' su Invia QR) per fargli trasmettere solo i ${missingIndices.size} pacchetti mancanti della sessione #$sessionId.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(220.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White)
+                        .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                        .testTag("nack_qr_bitmap_box"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        bitmap = nackBitmap.asImageBitmap(),
+                        contentDescription = "QR NACK Pacchetti Mancanti",
+                        filterQuality = FilterQuality.None,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Text(
+                    text = "PACCHETTI RICHIESTI: ${missingIndices.take(12).joinToString(", ") { "D#${it + 1}" }}" +
+                        if (missingIndices.size > 12) "…" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = JetBrainsMonoFontFamily,
+                    color = colorScheme.primary,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Torna allo Scanner")
+            }
+        }
+    )
+}
+
+@Composable
 private fun CameraScannerInstrumentPanel(
     receiverState: ReceiverUiState,
     hasCameraPermission: Boolean,
@@ -303,6 +480,8 @@ private fun CameraScannerInstrumentPanel(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isCompleted = receiverState.completedResult != null
+    var isTorchOn by rememberSaveable { mutableStateOf(false) }
+    var selectedZoomRatio by rememberSaveable { mutableFloatStateOf(1.0f) }
 
     OptiShareCard(
         isHighlighted = true,
@@ -317,7 +496,7 @@ private fun CameraScannerInstrumentPanel(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Scanner Fotocamera",
+                        text = "Scanner Fotocamera · Zoom & Torcia",
                         style = MaterialTheme.typography.labelMedium,
                         color = colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -358,10 +537,13 @@ private fun CameraScannerInstrumentPanel(
                         .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
                         .testTag("camera_preview_container")
                 ) {
-                    CameraXQrScannerPreview(onQrStringDecoded = onQrDecoded)
+                    CameraXQrScannerPreview(
+                        torchEnabled = isTorchOn,
+                        zoomRatio = selectedZoomRatio,
+                        onQrStringDecoded = onQrDecoded
+                    )
 
                     val bracketColor = if (isCompleted) colorScheme.tertiary else colorScheme.primary
-                    // Precision Corner Brackets Reticle (Leica / Industrial Finder style)
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val boxSize = size.minDimension * 0.68f
                         val left = (size.width - boxSize) / 2f
@@ -371,20 +553,15 @@ private fun CameraScannerInstrumentPanel(
                         val arm = 22.dp.toPx()
                         val stroke = 2.dp.toPx()
 
-                        // Top-Left Bracket
                         drawLine(bracketColor, Offset(left, top), Offset(left + arm, top), stroke)
                         drawLine(bracketColor, Offset(left, top), Offset(left, top + arm), stroke)
-                        // Top-Right Bracket
                         drawLine(bracketColor, Offset(right - arm, top), Offset(right, top), stroke)
                         drawLine(bracketColor, Offset(right, top), Offset(right, top + arm), stroke)
-                        // Bottom-Left Bracket
                         drawLine(bracketColor, Offset(left, bottom - arm), Offset(left, bottom), stroke)
                         drawLine(bracketColor, Offset(left, bottom), Offset(left + arm, bottom), stroke)
-                        // Bottom-Right Bracket
                         drawLine(bracketColor, Offset(right - arm, bottom), Offset(right, bottom), stroke)
                         drawLine(bracketColor, Offset(right, bottom - arm), Offset(right, bottom), stroke)
 
-                        // Center Crosshair Ticks
                         val cx = size.width / 2f
                         val cy = size.height / 2f
                         val cross = 6.dp.toPx()
@@ -400,6 +577,63 @@ private fun CameraScannerInstrumentPanel(
                             Offset(cx, cy + cross),
                             1.dp.toPx()
                         )
+                    }
+
+                    // Top Hardware Camera Controls Overlay (Torch + 1x / 1.5x / 2x Quick Zoom)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            onClick = { isTorchOn = !isTorchOn },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isTorchOn) colorScheme.primary else Color.Black.copy(alpha = 0.65f),
+                            contentColor = Color.White,
+                            modifier = Modifier.testTag("camera_torch_toggle_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                    contentDescription = "Torcia Flash",
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (isTorchOn) "Flash ON" else "Flash",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(1.0f to "1x", 1.5f to "1.5x", 2.0f to "2x").forEach { (ratio, label) ->
+                                val active = selectedZoomRatio == ratio
+                                Surface(
+                                    onClick = { selectedZoomRatio = ratio },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (active) colorScheme.primary else Color.Black.copy(alpha = 0.65f),
+                                    contentColor = Color.White,
+                                    modifier = Modifier.testTag("camera_zoom_${label}_button")
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // Bottom Monospace Telemetry Overlay Bar
@@ -419,7 +653,7 @@ private fun CameraScannerInstrumentPanel(
                             color = Color.White
                         )
                         Text(
-                            text = "${(receiverState.transferProgress * 100).toInt()}%",
+                            text = "${(receiverState.transferProgress * 100).toInt()}% · ${String.format(Locale.US, "%.1f", receiverState.liveSpeedKbps)} KB/s",
                             style = MaterialTheme.typography.labelMedium,
                             color = bracketColor
                         )
@@ -495,11 +729,15 @@ private fun CameraScannerInstrumentPanel(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AssemblyMatrixInstrumentPanel(receiverState: ReceiverUiState) {
+private fun AssemblyMatrixInstrumentPanel(
+    receiverState: ReceiverUiState,
+    onGenerateNackQr: () -> Unit
+) {
     val colorScheme = MaterialTheme.colorScheme
     val acquiredCount = receiverState.chunkStates.values.count {
         it != ChunkReceptionState.PENDING
     }
+    val missing = receiverState.missingDataChunkIndices
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -550,23 +788,23 @@ private fun AssemblyMatrixInstrumentPanel(receiverState: ReceiverUiState) {
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 TelemetryMetricCell(
-                    label = "Validati CRC32",
-                    value = "${receiverState.validFramesScanned}",
+                    label = "Velocità Live",
+                    value = String.format(Locale.US, "%.1f KB/s", receiverState.liveSpeedKbps),
+                    valueColor = colorScheme.primary,
+                    modifier = Modifier.weight(1f)
+                )
+                TelemetryMetricCell(
+                    label = "ETA Stimato",
+                    value = if (receiverState.completedResult != null) "0s" else "${receiverState.estimatedRemainingSeconds}s",
                     modifier = Modifier.weight(1f)
                 )
                 TelemetryMetricCell(
                     label = "Riparati XOR",
-                    value = "${receiverState.parityRecoveredCount}",
+                    value = "${receiverState.parityRecoveredCount} (${receiverState.validFramesScanned} OK)",
                     valueColor = colorScheme.secondary,
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "Scartati CRC",
-                    value = "${receiverState.crcErrorsRejected}",
-                    valueColor = if (receiverState.crcErrorsRejected > 0) colorScheme.error else colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -612,13 +850,28 @@ private fun AssemblyMatrixInstrumentPanel(receiverState: ReceiverUiState) {
                     }
                 }
 
-                val missing = receiverState.missingDataChunkIndices
-                if (missing.isNotEmpty() && missing.size <= 6) {
-                    Text(
-                        text = "MANCANTI: ${missing.joinToString(", ") { "D#${it + 1}" }}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.primary
-                    )
+                if (missing.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "MANCANTI (${missing.size}): ${missing.take(6).joinToString(", ") { "D#${it + 1}" }}" +
+                                if (missing.size > 6) "…" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = onGenerateNackQr,
+                            modifier = Modifier.testTag("generate_nack_qr_button")
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Mostra QR Mancanti (NACK)", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
         }
@@ -657,7 +910,11 @@ private fun VerifiedResultInstrumentPanel(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "INTEGRITÀ SHA-256 VERIFICATA",
+                                text = if (result.wasEncrypted) {
+                                    "DECIFRATO AES-256 & VERIFICATO SHA-256"
+                                } else {
+                                    "INTEGRITÀ SHA-256 VERIFICATA"
+                                },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colorScheme.tertiary
                             )
@@ -738,15 +995,32 @@ private fun triggerHapticTick(context: Context) {
 
 @Composable
 private fun CameraXQrScannerPreview(
+    torchEnabled: Boolean,
+    zoomRatio: Float,
     onQrStringDecoded: (String) -> Unit
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
+    var activeCamera by remember { mutableStateOf<Camera?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
             analysisExecutor.shutdown()
         }
+    }
+
+    DisposableEffect(activeCamera, torchEnabled) {
+        runCatching {
+            activeCamera?.cameraControl?.enableTorch(torchEnabled)
+        }
+        onDispose {}
+    }
+
+    DisposableEffect(activeCamera, zoomRatio) {
+        runCatching {
+            activeCamera?.cameraControl?.setZoomRatio(zoomRatio)
+        }
+        onDispose {}
     }
 
     AndroidView(
@@ -791,12 +1065,17 @@ private fun CameraXQrScannerPreview(
                     }
 
                     cameraProvider.unbindAll()
-                    cameraProvider.bindToLifecycle(
+                    val cam = cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
                         preview,
                         imageAnalysis
                     )
+                    activeCamera = cam
+                    runCatching {
+                        cam.cameraControl.enableTorch(torchEnabled)
+                        cam.cameraControl.setZoomRatio(zoomRatio)
+                    }
                 }
             }, ContextCompat.getMainExecutor(ctx))
 

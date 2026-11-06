@@ -287,7 +287,7 @@ fun OptiShareApp(
                                         modifier = Modifier.testTag("refresh_rate_badge")
                                     ) {
                                         Text(
-                                            text = "Offline · ${activeRefreshRateHz}Hz",
+                                            text = "Offline · v1.0.3 · ${activeRefreshRateHz}Hz",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colorScheme.onSecondaryContainer,
                                             fontWeight = FontWeight.SemiBold,
@@ -421,6 +421,9 @@ fun OptiShareApp(
                                             onPickFileUri = { uri ->
                                                 transferViewModel.prepareStreamFromUri(context, uri)
                                             },
+                                            onPickMultipleFileUris = { uris ->
+                                                transferViewModel.prepareStreamFromMultipleUris(context, uris)
+                                            },
                                             onCapturePhotoBitmap = { bitmap ->
                                                 transferViewModel.prepareStreamFromCapturedPhoto(bitmap)
                                             },
@@ -444,6 +447,15 @@ fun OptiShareApp(
                                             },
                                             onUpdateConfig = { chunkSize, ecc ->
                                                 transferViewModel.updateStreamConfig(chunkSize, ecc)
+                                            },
+                                            onUpdateEncryptionPassword = { pass ->
+                                                transferViewModel.updateSenderEncryptionPassword(pass)
+                                            },
+                                            onToggleAutoMaxBrightness = {
+                                                transferViewModel.toggleAutoMaxBrightness()
+                                            },
+                                            onScanNackQr = { qrStr ->
+                                                transferViewModel.applyScannedNackQr(qrStr)
                                             },
                                             onToggleMissingChunkFilter = { idx ->
                                                 transferViewModel.toggleMissingChunkFilter(idx)
@@ -469,6 +481,15 @@ fun OptiShareApp(
                                             },
                                             onStartLoopbackSimulation = {
                                                 transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
+                                            },
+                                            onGenerateNackQr = {
+                                                transferViewModel.generateReceiverNackQr()
+                                            },
+                                            onDismissNackQr = {
+                                                transferViewModel.dismissReceiverNackQr()
+                                            },
+                                            onSubmitDecryptionPassword = { pass ->
+                                                transferViewModel.submitReceiverDecryptionPassword(pass)
                                             },
                                             onRetransmitCompletedRecord = { record ->
                                                 transferViewModel.loadVaultRecordIntoSender(record)

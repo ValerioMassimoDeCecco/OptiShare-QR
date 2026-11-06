@@ -1,6 +1,6 @@
 {
-  "summary":  "Piano di migrazione F-Droid Ready per OptiShare QR: rimozione completa di tutte le dipendenze proprietarie Google/Firebase/GMS, eliminazione del permesso INTERNET per zero Anti-Feature, rimozione della scheda AI e focalizzazione esclusiva su Trasmissione QR Dinamica (CRC32/SHA-256 + Parità XOR), Ricevitore CameraX + ZXing e Archivio Locale Room Database.",
-  "updatedAt":  "2026-10-29T09:20:36.798856650Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Piano di implementazione per OptiShare QR v1.0.3 (versionCode 3): crittografia offline AES-256-GCM con PBKDF2, feedback inverso ottico NACK QR, compressione multi-file ZIP, generatore QR universale (Wi-Fi, vCard, Testo), generazione parallela multi-core delle bitmap QR con riuso buffer YUV, boost luminosità automatica, torcia/zoom CameraX, telemetria live KB/s + ETA e preparazione release 1.0.3 + F-Droid metadata.",
+  "updatedAt": "2026-11-06T21:31:20.249615877Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

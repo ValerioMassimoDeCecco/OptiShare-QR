@@ -1,4 +1,7 @@
-* Versione 1.02.
-* Nuova opzione "Fluidità Schermo 120 Hz": usa i display ad alto refresh (ProMotion/LTPO) e sincronizza il flusso QR al VSync.
-* Animazioni a molla e transizioni animate tra le schede per barre di avanzamento e componenti dell'interfaccia.
-* Recomposition ottimizzata grazie ai modelli immutabili: interfaccia più fluida e reattiva.
+OptiShare QR v1.0.3 (Build 3):
+- Crittografia offline opzionale AES-256-GCM con password (PBKDF2-HMAC-SHA256)
+- QR inverso NACK per richiedere e ritrasmettere solo i pacchetti mancanti
+- Compressione multi-file in archivio ZIP prima dell'invio ottico
+- Generatore QR universale standard per reti Wi-Fi, contatti vCard 3.0 e testo
+- Generazione parallela multi-core delle bitmap QR e riuso buffer YUV zero-GC
+- Boost luminosità 100% automatico, torcia flash, zoom rapido (1x/1.5x/2x), statistiche KB/s + ETA e fluidità 120Hz VSync

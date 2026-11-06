@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import kotlin.math.ceil
+import kotlin.math.max
 
 @Immutable
 data class SenderUiState(
@@ -42,10 +44,36 @@ data class SenderUiState(
     val chunkSize: Int = 380,
     val blockSize: Int = 4,
     val eccLevel: QrEccLevel = QrEccLevel.M,
+    val encryptionPassword: String = "",
+    val autoMaxBrightness: Boolean = true,
+    val encodingDurationMs: Long = 0L,
     val selectedMissingDataIndices: Set<Int> = emptySet(),
     val statusMessage: String? = null,
     val errorMessage: String? = null
-)
+) {
+    val activeFrameCount: Int
+        get() {
+            val s = stream ?: return 0
+            return if (selectedMissingDataIndices.isEmpty()) {
+                s.allOrderedPackets.size
+            } else {
+                s.allOrderedPackets.count {
+                    it.kind == PacketKind.DATA && selectedMissingDataIndices.contains(it.index)
+                }.coerceAtLeast(1)
+            }
+        }
+
+    val estimatedCycleSeconds: Float
+        get() = if (fps <= 0 || activeFrameCount == 0) 0f else activeFrameCount.toFloat() / fps.toFloat()
+
+    val theoreticalThroughputKbps: Float
+        get() {
+            val s = stream ?: return 0f
+            val cycleSec = estimatedCycleSeconds
+            if (cycleSec <= 0f) return 0f
+            return (s.originalBytes.size.toFloat() / 1024f) / cycleSec
+        }
+}
 
 @Immutable
 data class ReceiverUiState(
@@ -58,6 +86,9 @@ data class ReceiverUiState(
     val totalDataChunks: Int = 0,
     val blockSize: Int = 4,
     val chunkSize: Int = 380,
+    val isEncryptedStream: Boolean = false,
+    val awaitingDecryptionPassword: Boolean = false,
+    val decryptionError: String? = null,
     val chunkStates: Map<Int, ChunkReceptionState> = emptyMap(),
     val receivedParityBlocks: Set<Int> = emptySet(),
     val validFramesScanned: Int = 0,
@@ -66,6 +97,9 @@ data class ReceiverUiState(
     val lastScannedPacketLabel: String? = null,
     val transferProgress: Float = 0f,
     val elapsedMs: Long = 0L,
+    val liveSpeedKbps: Float = 0f,
+    val estimatedRemainingSeconds: Int = 0,
+    val nackQrBitmap: Bitmap? = null,
     val completedResult: ReconstructedFileResult? = null,
     val savedRecord: TransferRecordEntity? = null,
     val isLoopbackRunning: Boolean = false,
@@ -96,6 +130,7 @@ class TransferViewModel(
     private val receivedDataPayloads = mutableMapOf<Int, ByteArray>()
     private val receivedParityPackets = mutableMapOf<Int, OpticalPacket>()
     private val parityRecoveredSet = mutableSetOf<Int>()
+    private var lastReceivedPacketMeta: OpticalPacket? = null
     private var receptionStartTimeMs: Long = 0L
     private var loopbackJob: Job? = null
 
@@ -106,23 +141,23 @@ class TransferViewModel(
     fun loadSampleSpecDocument() {
         val sampleText = """
             ==========================================================
-            OPTISHARE QR — PROTOCOLLO OTTICO FOSS (F-DROID READY)
+            OPTISHARE QR v1.0.3 — PROTOCOLLO OTTICO FOSS (F-DROID READY)
             ==========================================================
             Modalità: Trasmissione Multi-Frame QR (100% Air-Gapped Offline)
-            Licenza & Dipendenze: Stack 100% Open Source (Apache 2.0)
+            Licenza & Dipendenze: Stack 100% Open Source (MIT / Apache 2.0)
             Permessi di Rete: NESSUNO (Zero Anti-Feature)
             
-            1. ARCHITETTURA DI TRASFERIMENTO OTTICO
-            - Compressione binaria GZIP pre-trasmissione.
-            - Suddivisione in pacchetti indicizzati con controllo CRC32 su ogni singolo QR.
-            - Correzione Errori Forward (FEC) tramite blocchi di Parità XOR: se la fotocamera
-              perde un frame in un blocco, il pacchetto viene ricostruito matematicamente
-              senza bisogno di attendere un intero ciclo di ripetizione.
+            1. ARCHITETTURA DI TRASFERIMENTO OTTICO v1.0.3
+            - Compressione binaria GZIP + Archivio Multi-File ZIP integrato.
+            - Crittografia autenticata end-to-end opzionale AES-256-GCM (PBKDF2-SHA256).
+            - Correzione Errori Forward (FEC) tramite blocchi di Parità XOR.
+            - Canale di ritorno ottico NACK QR per ritrasmettere solo i pacchetti mancanti.
+            - Generazione QR multi-core parallela e sincronizzazione display 120Hz VSync.
             - Verifica finale con impronta crittografica SHA-256 sull'intero file ricostruito.
         """.trimIndent()
 
         prepareStreamFromBytes(
-            fileName = "Specifica_OptiShare_FOSS.txt",
+            fileName = "Specifica_OptiShare_v1.0.3.txt",
             mimeType = "text/plain",
             rawBytes = sampleText.toByteArray(Charsets.UTF_8),
             saveToVaultAsSent = false
@@ -166,6 +201,58 @@ class TransferViewModel(
                     it.copy(
                         isPreparing = false,
                         errorMessage = "Errore caricamento file: ${e.localizedMessage}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Compresses multiple user-selected URIs into a single in-memory ZIP archive before QR encoding.
+     */
+    fun prepareStreamFromMultipleUris(context: Context, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (uris.size == 1) {
+            prepareStreamFromUri(context, uris.first())
+            return
+        }
+        viewModelScope.launch {
+            _senderState.update { it.copy(isPreparing = true, errorMessage = null) }
+            try {
+                val zipBytes = withContext(Dispatchers.IO) {
+                    val contentResolver = context.contentResolver
+                    val entries = mutableListOf<Pair<String, ByteArray>>()
+                    var totalBudget = 35_000
+
+                    for ((idx, uri) in uris.withIndex()) {
+                        if (totalBudget <= 0) break
+                        var name = "file_${idx + 1}.bin"
+                        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                            val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                            if (nameIdx != -1 && cursor.moveToFirst()) {
+                                name = cursor.getString(nameIdx) ?: name
+                            }
+                        }
+                        val raw = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: continue
+                        val clipped = if (raw.size > totalBudget) raw.copyOfRange(0, totalBudget) else raw
+                        totalBudget -= clipped.size
+                        entries.add(name to clipped)
+                    }
+                    require(entries.isNotEmpty()) { "Nessun file leggibile selezionato" }
+                    OpticalPacketProtocol.createZipArchive(entries)
+                }
+
+                prepareStreamFromBytes(
+                    fileName = "Archivio_${uris.size}_File.zip",
+                    mimeType = "application/zip",
+                    rawBytes = zipBytes,
+                    saveToVaultAsSent = true
+                )
+            } catch (e: Exception) {
+                _senderState.update {
+                    it.copy(
+                        isPreparing = false,
+                        errorMessage = "Errore creazione ZIP multi-file: ${e.localizedMessage}"
                     )
                 }
             }
@@ -239,6 +326,25 @@ class TransferViewModel(
         }
     }
 
+    fun updateSenderEncryptionPassword(newPassword: String) {
+        val trimmed = newPassword.trim()
+        val previous = _senderState.value.encryptionPassword
+        _senderState.update { it.copy(encryptionPassword = trimmed) }
+        val stream = _senderState.value.stream
+        if (stream != null && trimmed != previous) {
+            prepareStreamFromBytes(
+                fileName = stream.fileName,
+                mimeType = stream.mimeType,
+                rawBytes = stream.originalBytes,
+                saveToVaultAsSent = false
+            )
+        }
+    }
+
+    fun toggleAutoMaxBrightness() {
+        _senderState.update { it.copy(autoMaxBrightness = !it.autoMaxBrightness) }
+    }
+
     fun prepareStreamFromBytes(
         fileName: String,
         mimeType: String,
@@ -251,7 +357,9 @@ class TransferViewModel(
                 val currentChunkSize = _senderState.value.chunkSize
                 val currentBlockSize = _senderState.value.blockSize
                 val currentEcc = _senderState.value.eccLevel
+                val password = _senderState.value.encryptionPassword.takeIf { it.isNotBlank() }
 
+                val startTime = System.currentTimeMillis()
                 val (prepared, bitmaps) = withContext(Dispatchers.Default) {
                     val stream = OpticalPacketProtocol.prepareStream(
                         fileName = fileName,
@@ -259,17 +367,17 @@ class TransferViewModel(
                         rawBytes = rawBytes,
                         chunkSize = currentChunkSize,
                         blockSize = currentBlockSize,
+                        eccLevel = currentEcc,
+                        encryptionPassword = password
+                    )
+                    val generatedBitmaps = QrCodecEngine.generateQrBitmapsParallel(
+                        contents = stream.encodedQrStrings,
+                        sizePx = 680,
                         eccLevel = currentEcc
                     )
-                    val generatedBitmaps = stream.encodedQrStrings.map { qrStr ->
-                        QrCodecEngine.generateQrBitmap(
-                            content = qrStr,
-                            sizePx = 680,
-                            eccLevel = currentEcc
-                        )
-                    }
                     stream to generatedBitmaps
                 }
+                val durationMs = (System.currentTimeMillis() - startTime).coerceAtLeast(1L)
 
                 if (saveToVaultAsSent) {
                     repository.saveTransferFileAndRecord(
@@ -286,6 +394,7 @@ class TransferViewModel(
                     )
                 }
 
+                val encBadge = if (prepared.isEncrypted) " · AES-256-GCM" else ""
                 _senderState.update {
                     it.copy(
                         isPreparing = false,
@@ -293,8 +402,9 @@ class TransferViewModel(
                         qrBitmaps = bitmaps,
                         currentFramePosition = 0,
                         isPlaying = true,
+                        encodingDurationMs = durationMs,
                         selectedMissingDataIndices = emptySet(),
-                        statusMessage = "Stream ottico pronto: ${prepared.dataPackets.size} pacchetti dati + ${prepared.parityPackets.size} parità XOR"
+                        statusMessage = "Stream pronto in ${durationMs}ms: ${prepared.dataPackets.size} PKT + ${prepared.parityPackets.size} XOR$encBadge"
                     )
                 }
             } catch (e: Exception) {
@@ -306,6 +416,57 @@ class TransferViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * Parses a Reverse NACK QR string (`QBF1_NACK|<sessionId>|<indices>`) scanned by the sender
+     * and filters the outgoing QR stream to transmit ONLY the receiver's missing packets.
+     */
+    fun applyScannedNackQr(rawQrString: String): Result<Int> {
+        val stream = _senderState.value.stream
+            ?: return Result.failure(IllegalStateException("Nessuno stream attivo sul trasmettitore"))
+
+        return OpticalPacketProtocol.decodeNackQrString(rawQrString).mapCatching { nack ->
+            val validIndices = nack.missingDataIndices.filter { it in 0 until stream.dataPackets.size }.toSet()
+            require(validIndices.isNotEmpty()) {
+                "Nessun indice valido per lo stream corrente (${stream.dataPackets.size} PKT)"
+            }
+            _senderState.update {
+                it.copy(
+                    selectedMissingDataIndices = validIndices,
+                    currentFramePosition = 0,
+                    isPlaying = true,
+                    statusMessage = "NACK applicato: trasmissione mirata di ${validIndices.size} pacchetti mancanti"
+                )
+            }
+            validIndices.size
+        }
+    }
+
+    /**
+     * Generates a Reverse NACK QR bitmap on the receiver encoding the currently missing data chunk indices.
+     */
+    fun generateReceiverNackQr() {
+        val state = _receiverState.value
+        val sessionId = state.activeSessionId ?: return
+        val missing = state.missingDataChunkIndices
+        if (missing.isEmpty()) return
+
+        viewModelScope.launch {
+            val nackString = OpticalPacketProtocol.encodeNackQrString(sessionId, missing)
+            val bmp = withContext(Dispatchers.Default) {
+                QrCodecEngine.generateQrBitmap(
+                    content = nackString,
+                    sizePx = 640,
+                    eccLevel = QrEccLevel.Q
+                )
+            }
+            _receiverState.update { it.copy(nackQrBitmap = bmp) }
+        }
+    }
+
+    fun dismissReceiverNackQr() {
+        _receiverState.update { it.copy(nackQrBitmap = null) }
     }
 
     fun updateSenderFps(newFps: Int) {
@@ -387,6 +548,7 @@ class TransferViewModel(
         receivedDataPayloads.clear()
         receivedParityPackets.clear()
         parityRecoveredSet.clear()
+        lastReceivedPacketMeta = null
         receptionStartTimeMs = 0L
         _receiverState.value = ReceiverUiState()
     }
@@ -413,22 +575,25 @@ class TransferViewModel(
             receivedDataPayloads.clear()
             receivedParityPackets.clear()
             parityRecoveredSet.clear()
+            lastReceivedPacketMeta = packet
             receptionStartTimeMs = System.currentTimeMillis()
             val initialMap = (0 until packet.totalDataChunks).associateWith { ChunkReceptionState.PENDING }
             _receiverState.value = ReceiverUiState(
                 activeSessionId = packet.sessionId,
                 fileName = packet.fileName,
-                mimeType = packet.mimeType,
+                mimeType = OpticalPacketProtocol.stripEncryptedMimeSuffix(packet.mimeType),
                 expectedSha256 = packet.fileSha256,
                 originalSizeBytes = packet.originalSizeBytes,
                 compressedSizeBytes = packet.compressedSizeBytes,
                 totalDataChunks = packet.totalDataChunks,
                 blockSize = packet.blockSize,
                 chunkSize = packet.chunkSize,
+                isEncryptedStream = packet.isEncrypted,
                 chunkStates = initialMap,
-                statusBanner = "Agganciato stream '${packet.fileName}' (${packet.totalDataChunks} pacchetti)"
+                statusBanner = "Agganciato stream '${packet.fileName}' (${packet.totalDataChunks} PKT${if (packet.isEncrypted) " · AES-256" else ""})"
             )
         }
+        lastReceivedPacketMeta = packet
 
         var newlyAdded = false
         val updatedChunkStates = _receiverState.value.chunkStates.toMutableMap()
@@ -474,7 +639,17 @@ class TransferViewModel(
 
         val receivedCount = receivedDataPayloads.size
         val progress = (receivedCount.toFloat() / packet.totalDataChunks.toFloat()).coerceIn(0f, 1f)
-        val elapsed = (System.currentTimeMillis() - receptionStartTimeMs).coerceAtLeast(1L)
+        val elapsedMs = max(1L, System.currentTimeMillis() - receptionStartTimeMs)
+        val elapsedSec = elapsedMs.toFloat() / 1000f
+        val receivedBytesCount = receivedDataPayloads.values.sumOf { it.size }
+        val speedKbps = (receivedBytesCount.toFloat() / 1024f) / elapsedSec.coerceAtLeast(0.15f)
+        val remainingChunks = (packet.totalDataChunks - receivedCount).coerceAtLeast(0)
+        val chunksPerSec = receivedCount.toFloat() / elapsedSec.coerceAtLeast(0.15f)
+        val etaSeconds = if (remainingChunks == 0 || chunksPerSec <= 0.05f) {
+            0
+        } else {
+            ceil(remainingChunks / chunksPerSec).toInt()
+        }
 
         _receiverState.update {
             it.copy(
@@ -484,9 +659,13 @@ class TransferViewModel(
                 parityRecoveredCount = parityRecoveredSet.size,
                 lastScannedPacketLabel = "${packet.displayNumber} (CRC ${packet.crc32Hex.take(6)})",
                 transferProgress = progress,
-                elapsedMs = elapsed,
+                elapsedMs = elapsedMs,
+                liveSpeedKbps = speedKbps,
+                estimatedRemainingSeconds = etaSeconds,
                 statusBanner = if (receivedCount < packet.totalDataChunks) {
-                    "Ricevuti $receivedCount/${packet.totalDataChunks} pacchetti (${parityRecoveredSet.size} recuperati via Parità XOR)"
+                    "Ricevuti $receivedCount/${packet.totalDataChunks} PKT (${String.format("%.1f", speedKbps)} KB/s · ETA ${etaSeconds}s)"
+                } else if (packet.isEncrypted) {
+                    "Tutti i pacchetti acquisiti! Inserisci la password AES-256 per decifrare."
                 } else {
                     "Tutti i pacchetti acquisiti! Verifica SHA-256 in corso..."
                 }
@@ -494,12 +673,37 @@ class TransferViewModel(
         }
 
         if (receivedCount == packet.totalDataChunks) {
-            finalizeFileReconstruction(packet)
+            if (packet.isEncrypted) {
+                // If loopback test is running and sender has the password, auto-supply it; otherwise prompt user
+                val autoPass = if (_receiverState.value.isLoopbackRunning) {
+                    _senderState.value.encryptionPassword.takeIf { it.isNotBlank() }
+                } else {
+                    null
+                }
+                if (autoPass != null) {
+                    finalizeFileReconstruction(packet, autoPass)
+                } else {
+                    _receiverState.update {
+                        it.copy(
+                            awaitingDecryptionPassword = true,
+                            decryptionError = null,
+                            isLoopbackRunning = false
+                        )
+                    }
+                }
+            } else {
+                finalizeFileReconstruction(packet, null)
+            }
         }
         return true
     }
 
-    private fun finalizeFileReconstruction(lastPacket: OpticalPacket) {
+    fun submitReceiverDecryptionPassword(password: String) {
+        val lastPacket = lastReceivedPacketMeta ?: return
+        finalizeFileReconstruction(lastPacket, password.trim())
+    }
+
+    private fun finalizeFileReconstruction(lastPacket: OpticalPacket, decryptionPassword: String?) {
         val snapshotPayloads = receivedDataPayloads.toMap()
         val snapshotParitySet = parityRecoveredSet.toSet()
 
@@ -512,7 +716,8 @@ class TransferViewModel(
                     expectedSha256 = lastPacket.fileSha256,
                     totalDataChunks = lastPacket.totalDataChunks,
                     receivedDataPayloads = snapshotPayloads,
-                    parityRecoveredIndices = snapshotParitySet
+                    parityRecoveredIndices = snapshotParitySet,
+                    decryptionPassword = decryptionPassword
                 )
             }
 
@@ -533,6 +738,9 @@ class TransferViewModel(
                     it.copy(
                         completedResult = reconstructed,
                         savedRecord = savedEntity,
+                        awaitingDecryptionPassword = false,
+                        decryptionError = null,
+                        nackQrBitmap = null,
                         isLoopbackRunning = false,
                         statusBanner = if (reconstructed.integrityVerified) {
                             "Trasferimento completato! Integrità SHA-256 verificata al 100%."
@@ -545,7 +753,9 @@ class TransferViewModel(
                 _receiverState.update {
                     it.copy(
                         isLoopbackRunning = false,
-                        statusBanner = "Errore ricostruzione file: ${err.localizedMessage}"
+                        awaitingDecryptionPassword = lastPacket.isEncrypted,
+                        decryptionError = err.localizedMessage ?: "Password non valida",
+                        statusBanner = "Errore ricostruzione: ${err.localizedMessage}"
                     )
                 }
             }
@@ -567,11 +777,11 @@ class TransferViewModel(
 
         loopbackJob = viewModelScope.launch {
             for ((idx, bitmap) in senderBitmaps.withIndex()) {
-                if (_receiverState.value.completedResult != null) break
+                if (_receiverState.value.completedResult != null || _receiverState.value.awaitingDecryptionPassword) break
                 val pkt = stream.allOrderedPackets.getOrNull(idx)
 
                 if (simulateFrameDrops && pkt != null && pkt.kind == PacketKind.DATA && pkt.index == 1 && pkt.totalDataChunks >= 3) {
-                    delay(140L)
+                    delay(120L)
                     _receiverState.update {
                         it.copy(statusBanner = "Simulato riflesso ottico su D#2: attesa pacchetto Parità XOR...")
                     }
@@ -584,7 +794,7 @@ class TransferViewModel(
                 if (decodedString != null) {
                     onQrStringScanned(decodedString)
                 }
-                delay(150L)
+                delay(120L)
             }
             _receiverState.update { it.copy(isLoopbackRunning = false) }
         }

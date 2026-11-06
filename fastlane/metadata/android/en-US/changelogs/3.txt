@@ -1,4 +1,7 @@
-* Version 1.02.
-* New "120 Hz display smoothness" option: uses high refresh rate displays (ProMotion/LTPO) and syncs the QR stream to VSync.
-* Spring-based animations and animated tab transitions for progress bars and UI components.
-* Optimised recomposition with immutable models: a smoother, snappier interface.
+OptiShare QR v1.0.3 (Build 3):
+- Optional offline AES-256-GCM password encryption (PBKDF2-HMAC-SHA256)
+- Optical Reverse NACK QR to request and retransmit only missing packets
+- Multi-file ZIP archive compression before optical streaming
+- Universal standard QR generator for Wi-Fi networks, vCard 3.0 contacts, and text
+- Multi-core parallel QR bitmap generation and zero-allocation YUV scanner buffers
+- Automatic 100% screen brightness boost, camera torch & quick zoom (1x/1.5x/2x), live KB/s + ETA telemetry, and 120Hz VSync fluidity

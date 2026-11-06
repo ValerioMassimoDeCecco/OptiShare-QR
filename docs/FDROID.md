@@ -26,7 +26,8 @@ significa che l'app sia stata approvata o pubblicata. Una richiesta è aperta:
   `signingConfigs { … }` e la riga `signingConfig = …` vengono eliminati con
   delle espressioni regolari, e il file che resta è ancora bilanciato e valido.
 - **Metadati Fastlane.** Titolo e descrizioni in italiano e inglese con le note
-  di rilascio in `changelogs/1.txt` per il `versionCode` 1.
+  di rilascio in `changelogs/<versionCode>.txt` (oggi `changelogs/3.txt` per il
+  `versionCode` 3).
 - **Tag sorgente immutabile.** Il commit di release è identificato dal tag
   `v1.0`, così la richiesta può indicare uno snapshot preciso e F-Droid può
   seguire i tag per gli aggiornamenti.

@@ -1,0 +1,4 @@
+* Versione 1.02.
+* Nuova opzione "Fluidità Schermo 120 Hz": usa i display ad alto refresh (ProMotion/LTPO) e sincronizza il flusso QR al VSync.
+* Animazioni a molla e transizioni animate tra le schede per barre di avanzamento e componenti dell'interfaccia.
+* Recomposition ottimizzata grazie ai modelli immutabili: interfaccia più fluida e reattiva.

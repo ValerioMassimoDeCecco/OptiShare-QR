@@ -3,6 +3,7 @@
     <string name="nav_send">Invia QR</string>
     <string name="nav_receive">Ricevi</string>
     <string name="nav_vault">Archivio</string>
+    <string name="nav_settings">Stile &amp; Tema</string>
     <string name="hero_title">Trasmissione Ottica FOSS &amp; Air-Gapped</string>
     <string name="hero_subtitle">100% Offline • Parità XOR • Checksum CRC32 &amp; SHA-256</string>
     <string name="pick_file_button">Scegli File dal Dispositivo</string>

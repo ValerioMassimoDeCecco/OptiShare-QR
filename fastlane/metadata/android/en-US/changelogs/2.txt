@@ -1,0 +1,4 @@
+* Version 1.01.
+* Updated Material You (Material Design 3) interface with Dynamic Color support and floating bottom navigation bar.
+* Built-in CameraX photo capture dialog with simulation snapshot fallback.
+* Instant search and inspector view in the local archive.

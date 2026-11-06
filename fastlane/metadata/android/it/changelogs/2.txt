@@ -1,0 +1,4 @@
+* Versione 1.01.
+* Nuovo design Material You (Material Design 3) con supporto ai colori dinamici di sistema e barra di navigazione inferiore flottante.
+* Acquisizione foto integrata in-app tramite CameraX con modalità simulazione per emulatori.
+* Ricerca istantanea e vista ispettore nell'Archivio locale.

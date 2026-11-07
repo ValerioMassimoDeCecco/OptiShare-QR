@@ -74,6 +74,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +108,7 @@ import com.example.ui.components.InstrumentActionButton
 import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.TelemetryMetricCell
+import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.ReceiverUiState
 import kotlinx.coroutines.Dispatchers
@@ -129,8 +131,23 @@ fun ReceiveScanScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberOptiShareHaptics()
     val scope = rememberCoroutineScope()
     var showResetConfirmDialog by rememberSaveable { mutableStateOf(false) }
+
+    // One-shot confirmation haptic when a file transfer finishes and SHA-256 is verified
+    LaunchedEffect(receiverState.completedResult?.sessionId) {
+        if (receiverState.completedResult != null) {
+            haptics.confirmSuccess()
+        }
+    }
+
+    // One-shot error haptic when AES-256 decryption fails with an invalid passphrase
+    LaunchedEffect(receiverState.decryptionError) {
+        if (!receiverState.decryptionError.isNullOrBlank()) {
+            haptics.notifyError()
+        }
+    }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -160,7 +177,10 @@ fun ReceiveScanScreen(
                 }
                 if (decoded != null) {
                     val accepted = onQrScanned(decoded)
-                    if (accepted) triggerHapticTick(context)
+                    if (accepted) {
+                        haptics.selectionTick()
+                        triggerHapticTick(context)
+                    }
                 }
             }
         }

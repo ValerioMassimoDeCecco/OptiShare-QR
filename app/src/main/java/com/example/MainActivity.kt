@@ -78,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -96,6 +97,7 @@ import com.example.ui.components.AdaptiveAppBackground
 import com.example.ui.components.LiquidGlassBarSurface
 import com.example.ui.components.liquidGlassRimAndHighlight
 import com.example.ui.components.rememberLiquidGlassTokens
+import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.screens.ReceiveScanScreen
 import com.example.ui.screens.SendQrScreen
 import com.example.ui.screens.SettingsScreen
@@ -252,17 +254,21 @@ fun OptiShareApp(
     val isLiquidGlass = customization.designStyle == DesignStyle.LIQUID_GLASS
     val colorScheme = MaterialTheme.colorScheme
     val glassTokens = rememberLiquidGlassTokens(customization)
+    val haptics = rememberOptiShareHaptics()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     AdaptiveAppBackground {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isExpandedScreen = maxWidth >= 600.dp
 
             Scaffold(
+                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets.safeDrawing,
                 topBar = {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         TopAppBar(
+                            scrollBehavior = scrollBehavior,
                             title = {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -271,7 +277,7 @@ fun OptiShareApp(
                                     Surface(
                                         shape = RoundedCornerShape(11.dp),
                                         color = colorScheme.primaryContainer.copy(
-                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.88f
+                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.90f
                                         ),
                                         contentColor = colorScheme.onPrimaryContainer,
                                         modifier = Modifier.liquidGlassRimAndHighlight(
@@ -304,7 +310,7 @@ fun OptiShareApp(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "Offline · v1.0.3 · ${activeRefreshRateHz}Hz",
+                                            text = "Offline · v1.04 · ${activeRefreshRateHz}Hz",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = colorScheme.primary,
                                             fontWeight = FontWeight.Medium,
@@ -318,6 +324,8 @@ fun OptiShareApp(
                             actions = {
                                 FilledTonalButton(
                                     onClick = {
+                                        val nextIsGlass = customization.designStyle == DesignStyle.MATERIAL
+                                        haptics.toggle(nextIsGlass)
                                         themeManager.update { current ->
                                             val nextStyle = if (current.designStyle == DesignStyle.MATERIAL) {
                                                 DesignStyle.LIQUID_GLASS
@@ -331,7 +339,7 @@ fun OptiShareApp(
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
                                         containerColor = colorScheme.secondaryContainer.copy(
-                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.82f
+                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.85f
                                         ),
                                         contentColor = colorScheme.onSecondaryContainer
                                     ),
@@ -342,7 +350,7 @@ fun OptiShareApp(
                                             cornerRadius = 12.dp,
                                             accentColor = colorScheme.primary,
                                             isDark = glassTokens.isDark,
-                                            specularAlpha = (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.6f),
+                                            specularAlpha = (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.55f),
                                             meniscusAlpha = glassTokens.innerMeniscusAlpha,
                                             refractionAlpha = glassTokens.refractionTintAlpha * 0.5f
                                         )
@@ -365,6 +373,9 @@ fun OptiShareApp(
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = colorScheme.surface.copy(alpha = glassTokens.barSurfaceAlpha),
+                                scrolledContainerColor = colorScheme.surfaceVariant.copy(
+                                    alpha = (glassTokens.barSurfaceAlpha + 0.04f).coerceAtMost(0.98f)
+                                ),
                                 titleContentColor = colorScheme.onBackground
                             )
                         )
@@ -397,7 +408,12 @@ fun OptiShareApp(
                                         val selected = currentTab == tab
                                         NavigationRailItem(
                                             selected = selected,
-                                            onClick = { currentTab = tab },
+                                            onClick = {
+                                                if (currentTab != tab) {
+                                                    haptics.selectionTick()
+                                                    currentTab = tab
+                                                }
+                                            },
                                             icon = {
                                                 Icon(
                                                     imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
@@ -417,7 +433,7 @@ fun OptiShareApp(
                                                 selectedIconColor = colorScheme.onSecondaryContainer,
                                                 selectedTextColor = colorScheme.onSurface,
                                                 indicatorColor = colorScheme.secondaryContainer.copy(
-                                                    alpha = if (glassTokens.reduceTransparency) 1f else 0.86f
+                                                    alpha = if (glassTokens.reduceTransparency) 1f else 0.88f
                                                 ),
                                                 unselectedIconColor = colorScheme.onSurfaceVariant,
                                                 unselectedTextColor = colorScheme.onSurfaceVariant
@@ -610,6 +626,7 @@ private fun FloatingMaterialNavigationBar(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val glassTokens = rememberLiquidGlassTokens()
+    val haptics = rememberOptiShareHaptics()
     val itemRadius = 16.dp
     val itemShape = remember { RoundedCornerShape(itemRadius) }
 
@@ -641,7 +658,7 @@ private fun FloatingMaterialNavigationBar(
                     targetValue = when {
                         !selected -> Color.Transparent
                         glassTokens.reduceTransparency -> colorScheme.secondaryContainer
-                        else -> colorScheme.secondaryContainer.copy(alpha = 0.82f)
+                        else -> colorScheme.secondaryContainer.copy(alpha = 0.86f)
                     },
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "NavTabContainer120Hz"
@@ -665,7 +682,12 @@ private fun FloatingMaterialNavigationBar(
                 )
 
                 Surface(
-                    onClick = { onSelectTab(tab) },
+                    onClick = {
+                        if (!selected) {
+                            haptics.selectionTick()
+                            onSelectTab(tab)
+                        }
+                    },
                     shape = itemShape,
                     color = itemContainerColor,
                     contentColor = itemContentColor,

@@ -58,6 +58,7 @@ import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
+import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.theme.AccentPalettePreset
 import com.example.ui.theme.AppCustomizationState
 import com.example.ui.theme.AppFontChoice
@@ -302,6 +303,7 @@ private fun DesignEngineSelectorPanel(
     onApplyPreset: (String) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -342,6 +344,7 @@ private fun DesignEngineSelectorPanel(
                                 shape = shape
                             )
                             .clickable {
+                                if (!selected) haptics.selectionTick()
                                 onUpdateCustomization { it.copy(designStyle = style) }
                             }
                             .testTag(tag)
@@ -405,7 +408,10 @@ private fun DesignEngineSelectorPanel(
                     "MONOCHROME_TERMINAL" to "Material Scuro Ardesia"
                 ).forEach { (key, label) ->
                     FilledTonalButton(
-                        onClick = { onApplyPreset(key) },
+                        onClick = {
+                            haptics.selectionTick()
+                            onApplyPreset(key)
+                        },
                         modifier = Modifier.testTag("preset_$key")
                     ) {
                         Text(label, style = MaterialTheme.typography.labelSmall)
@@ -439,6 +445,7 @@ private fun DesignEngineSelectorPanel(
                 Switch(
                     checked = customization.preferHighRefreshRate,
                     onCheckedChange = { enabled ->
+                        haptics.toggle(enabled)
                         onUpdateCustomization { it.copy(preferHighRefreshRate = enabled) }
                     },
                     modifier = Modifier.testTag("switch_high_refresh_rate_120hz")
@@ -454,6 +461,7 @@ private fun SurfaceCalibrationPanel(
     onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
 
     AnimatedVisibility(visible = customization.designStyle == DesignStyle.LIQUID_GLASS) {
         OptiShareCard(modifier = Modifier.fillMaxWidth()) {
@@ -520,6 +528,7 @@ private fun SurfaceCalibrationPanel(
                     Switch(
                         checked = customization.glassAmbientOrbsEnabled,
                         onCheckedChange = { enabled ->
+                            haptics.toggle(enabled)
                             onUpdateCustomization { it.copy(glassAmbientOrbsEnabled = enabled) }
                         },
                         modifier = Modifier.testTag("switch_glass_orbs")
@@ -553,6 +562,7 @@ private fun SurfaceCalibrationPanel(
                     Switch(
                         checked = customization.glassInnerHighlightEnabled,
                         onCheckedChange = { enabled ->
+                            haptics.toggle(enabled)
                             onUpdateCustomization { it.copy(glassInnerHighlightEnabled = enabled) }
                         }
                     )
@@ -615,6 +625,7 @@ private fun SurfaceCalibrationPanel(
                     Switch(
                         checked = customization.materialUseTonalElevation,
                         onCheckedChange = { enabled ->
+                            haptics.toggle(enabled)
                             onUpdateCustomization { it.copy(materialUseTonalElevation = enabled) }
                         }
                     )
@@ -631,6 +642,7 @@ private fun ColorAndLuminancePanel(
     onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -668,6 +680,7 @@ private fun ColorAndLuminancePanel(
                     Switch(
                         checked = customization.useDynamicColor,
                         onCheckedChange = { enabled ->
+                            haptics.toggle(enabled)
                             onUpdateCustomization { it.copy(useDynamicColor = enabled) }
                         },
                         modifier = Modifier.testTag("switch_dynamic_color")
@@ -707,6 +720,7 @@ private fun ColorAndLuminancePanel(
                                     shape = shape
                                 )
                                 .clickable {
+                                    haptics.selectionTick()
                                     onUpdateCustomization { it.copy(palette = preset) }
                                 }
                                 .testTag("palette_${preset.name}")

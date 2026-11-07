@@ -1,0 +1,4 @@
+Version 1.04:
+- Cohesive Material You (Android 12+ dynamic color, tonal roles, and high-contrast content cards) and Liquid Glass (translucent chrome with 1dp specular meniscus and directional rim on TopAppBar, bottom navigation bar, NavigationRail, segmented selectors, and camera HUD pills)
+- Scroll-connected TopAppBar (pinnedScrollBehavior) and refined navigation bars with full interactive states (normal, pressed, selected, disabled, focus) and system insets
+- Purposeful native Android haptic feedback on tab/mode switches, toggles, SHA-256 copy, transfer completion, and significant errors while respecting system haptic settings

@@ -3,6 +3,7 @@ package com.example
 import com.example.domain.protocol.OpticalPacketProtocol
 import com.example.domain.protocol.PacketKind
 import com.example.ui.components.LiquidGlassTokens
+import com.example.ui.components.OptiShareHaptics
 import com.example.ui.theme.AccentPalettePreset
 import com.example.ui.theme.AppCustomizationState
 import com.example.ui.theme.DesignStyle
@@ -92,7 +93,7 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun liquidGlassTokens_andCustomizationState_maintainLegibleContrastBounds() {
+    fun liquidGlassTokens_andHaptics_maintainHierarchyAndSafeFallbacks() {
         val defaultState = AppCustomizationState()
         assertEquals(DesignStyle.MATERIAL, defaultState.designStyle)
         assertTrue(defaultState.glassOpacity in 0.65f..0.95f)
@@ -115,12 +116,21 @@ class ExampleUnitTest {
             reduceMotion = false,
             supportsRenderEffect = true,
             barSurfaceAlpha = glassState.glassOpacity.coerceIn(0.72f, 0.90f),
-            cardSurfaceAlpha = glassState.glassOpacity.coerceIn(0.78f, 0.94f),
+            cardSurfaceAlpha = glassState.materialSurfaceContrast.coerceIn(0.90f, 0.98f),
             specularRimAlpha = 0.22f,
             innerMeniscusAlpha = 0.24f,
             refractionTintAlpha = 0.03f
         )
         assertTrue("Bar surface alpha must remain legible", tokens.barSurfaceAlpha >= 0.72f)
-        assertTrue("Card surface alpha must preserve WCAG readability", tokens.cardSurfaceAlpha >= 0.78f)
+        assertTrue("Card surface alpha must remain high-contrast and more opaque than bars", tokens.cardSurfaceAlpha >= 0.90f)
+        assertTrue(tokens.cardSurfaceAlpha > tokens.barSurfaceAlpha)
+
+        // Verify OptiShareHaptics safely no-ops when View is unavailable or haptics are disabled
+        val headlessHaptics = OptiShareHaptics(view = null)
+        headlessHaptics.selectionTick()
+        headlessHaptics.toggle(true)
+        headlessHaptics.toggle(false)
+        headlessHaptics.confirmSuccess()
+        headlessHaptics.notifyError()
     }
 }

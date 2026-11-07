@@ -125,6 +125,7 @@ import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
+import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.SenderUiState
 import kotlinx.coroutines.Dispatchers
@@ -156,6 +157,7 @@ fun SendQrScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptics = rememberOptiShareHaptics()
     var showTextNoteDialog by rememberSaveable { mutableStateOf(false) }
     var showPhotoCaptureDialog by rememberSaveable { mutableStateOf(false) }
     var showStandardQrDialog by rememberSaveable { mutableStateOf(false) }
@@ -521,6 +523,7 @@ fun SendQrScreen(
         AesEncryptionPasswordDialog(
             currentPassword = senderState.encryptionPassword,
             onApplyPassword = { pass ->
+                haptics.confirmSuccess()
                 onUpdateEncryptionPassword(pass)
                 showEncryptionDialog = false
             },
@@ -531,6 +534,7 @@ fun SendQrScreen(
     if (showStandardQrDialog) {
         UniversalStandardQrDialog(
             onTransmitAsOptiShareStream = { title, content ->
+                haptics.confirmSuccess()
                 showStandardQrDialog = false
                 onCreateTextNote(title, content)
             },
@@ -549,6 +553,7 @@ fun SendQrScreen(
             onNackScanned = { qrStr ->
                 val res = onScanNackQr(qrStr)
                 res.onSuccess { count ->
+                    haptics.confirmSuccess()
                     Toast.makeText(
                         context,
                         "NACK acquisito: filtrati $count pacchetti mancanti",
@@ -556,6 +561,7 @@ fun SendQrScreen(
                     ).show()
                     showNackScannerDialog = false
                 }.onFailure { err ->
+                    haptics.notifyError()
                     Toast.makeText(
                         context,
                         err.localizedMessage ?: "QR NACK non valido",
@@ -1330,6 +1336,7 @@ private fun OpticalStagePanel(
     onNavigateToReceiveLoopback: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
     val stream = senderState.stream
     val bitmaps = senderState.qrBitmaps
 
@@ -1536,7 +1543,10 @@ private fun OpticalStagePanel(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = { onStepFrame(-1) },
+                            onClick = {
+                                haptics.selectionTick()
+                                onStepFrame(-1)
+                            },
                             modifier = Modifier
                                 .size(44.dp)
                                 .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
@@ -1552,7 +1562,10 @@ private fun OpticalStagePanel(
                         InstrumentActionButton(
                             label = if (senderState.isPlaying) "Pausa Flusso" else "Avvia Flusso",
                             icon = if (senderState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            onClick = onTogglePlayPause,
+                            onClick = {
+                                haptics.toggle(!senderState.isPlaying)
+                                onTogglePlayPause()
+                            },
                             isPrimary = true,
                             modifier = Modifier
                                 .weight(1f)
@@ -1560,7 +1573,10 @@ private fun OpticalStagePanel(
                         )
 
                         IconButton(
-                            onClick = { onStepFrame(1) },
+                            onClick = {
+                                haptics.selectionTick()
+                                onStepFrame(1)
+                            },
                             modifier = Modifier
                                 .size(44.dp)
                                 .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
@@ -1617,6 +1633,7 @@ private fun InspectorTabbedPanel(
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
     var activeTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("Telemetria", "Calibrazione", "Filtro NACK")
 
@@ -1704,6 +1721,7 @@ private fun InspectorTabbedPanel(
                         }
                         IconButton(
                             onClick = {
+                                haptics.confirmSuccess()
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 clipboard?.setPrimaryClip(ClipData.newPlainText("SHA-256", stream.fileSha256))
                                 Toast.makeText(context, "SHA-256 copiato", Toast.LENGTH_SHORT).show()
@@ -1789,7 +1807,10 @@ private fun InspectorTabbedPanel(
                         }
                         Switch(
                             checked = senderState.autoMaxBrightness,
-                            onCheckedChange = { onToggleAutoMaxBrightness() },
+                            onCheckedChange = {
+                                haptics.toggle(!senderState.autoMaxBrightness)
+                                onToggleAutoMaxBrightness()
+                            },
                             modifier = Modifier.testTag("switch_auto_max_brightness")
                         )
                     }
@@ -1834,7 +1855,10 @@ private fun InspectorTabbedPanel(
                             color = colorScheme.onSurfaceVariant
                         )
                         FilledTonalButton(
-                            onClick = onOpenNackScanner,
+                            onClick = {
+                                haptics.selectionTick()
+                                onOpenNackScanner()
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1864,7 +1888,12 @@ private fun InspectorTabbedPanel(
                                     .weight(1f)
                                     .padding(end = 8.dp)
                             )
-                            TextButton(onClick = onClearMissingChunkFilter) {
+                            TextButton(
+                                onClick = {
+                                    haptics.toggle(false)
+                                    onClearMissingChunkFilter()
+                                }
+                            ) {
                                 Text(
                                     text = "Ripristina Tutti",
                                     maxLines = 1,
@@ -1893,7 +1922,10 @@ private fun InspectorTabbedPanel(
                                         color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
                                         shape = MaterialTheme.shapes.small
                                     )
-                                    .clickable { onToggleMissingChunkFilter(i) },
+                                    .clickable {
+                                        haptics.selectionTick()
+                                        onToggleMissingChunkFilter(i)
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(

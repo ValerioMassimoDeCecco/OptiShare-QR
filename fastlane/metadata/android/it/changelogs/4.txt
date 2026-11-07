@@ -1,0 +1,4 @@
+Versione 1.04:
+- Sistema unificato Material You (colori dinamici Android 12+, ruoli cromatici tonali e card contenuti ad alto contrasto) e Liquid Glass (superfici traslucide con menisco speculare da 1dp e bordo direzionale su TopAppBar, barra di navigazione inferiore, NavigationRail, selettori segmentati e HUD fotocamera)
+- TopAppBar collegata allo scroll (pinnedScrollBehavior) e barre di navigazione rifinite con supporto completo agli stati (normale, premuto, selezionato, disabilitato, focus) e inset di sistema
+- Feedback aptico nativo Android contestuale (cambio tab/modalità, toggle, copia SHA-256, completamento trasferimento e notifica errori) nel rispetto delle impostazioni di sistema

@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
+import android.view.View
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -61,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
@@ -76,8 +79,96 @@ import com.example.ui.theme.LocalAppCustomization
 import com.example.ui.theme.ThemeModeOption
 
 /**
- * Runtime Liquid Glass visual & accessibility tokens resolved for the current device,
+ * Platform-native Android Haptic Feedback controller that respects system
+ * touch vibration settings (`View.isHapticFeedbackEnabled`) and uses semantic
+ * `HapticFeedbackConstants` across API 24..36 without external dependencies.
+ */
+@Immutable
+class OptiShareHaptics(private val view: View?) {
+
+    private fun canVibrate(): Boolean {
+        val v = view ?: return false
+        return v.isHapticFeedbackEnabled
+    }
+
+    /** Subtle tick for tab switches, segmented selectors, zoom pills, and frame stepping. */
+    fun selectionTick() {
+        val v = view ?: return
+        if (!canVibrate()) return
+        runCatching {
+            val constant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                HapticFeedbackConstants.SEGMENT_TICK
+            } else {
+                HapticFeedbackConstants.CLOCK_TICK
+            }
+            v.performHapticFeedback(constant)
+        }
+    }
+
+    /** Crisp feedback for activating or deactivating an important toggle or transport control. */
+    fun toggle(enabled: Boolean = true) {
+        val v = view ?: return
+        if (!canVibrate()) return
+        runCatching {
+            val constant = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> {
+                    if (enabled) HapticFeedbackConstants.TOGGLE_ON else HapticFeedbackConstants.TOGGLE_OFF
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                    HapticFeedbackConstants.CONFIRM
+                }
+                else -> {
+                    HapticFeedbackConstants.VIRTUAL_KEY
+                }
+            }
+            v.performHapticFeedback(constant)
+        }
+    }
+
+    /** Confirmation pulse when an important operation completes (e.g., SHA-256 verified transfer). */
+    fun confirmSuccess() {
+        val v = view ?: return
+        if (!canVibrate()) return
+        runCatching {
+            val constant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.CONTEXT_CLICK
+            }
+            v.performHapticFeedback(constant)
+        }
+    }
+
+    /** Distinct alert feedback for significant errors (e.g., wrong AES-256 password or invalid NACK QR). */
+    fun notifyError() {
+        val v = view ?: return
+        if (!canVibrate()) return
+        runCatching {
+            val constant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.REJECT
+            } else {
+                HapticFeedbackConstants.LONG_PRESS
+            }
+            v.performHapticFeedback(constant)
+        }
+    }
+}
+
+@Composable
+fun rememberOptiShareHaptics(): OptiShareHaptics {
+    val view = LocalView.current
+    return remember(view) { OptiShareHaptics(view) }
+}
+
+/**
+ * Runtime Liquid Glass & Material You tokens resolved for the current device,
  * theme luminance, and system accessibility/power-save preferences.
+ *
+ * Design Rule:
+ * - Floating chrome (TopBar, Bottom Navigation Bar, Segmented Bar, Camera HUD pills)
+ *   uses controlled translucency (`barSurfaceAlpha`) and delicate specular rims.
+ * - Primary content cards (`OptiShareCard`) remain solid/high-contrast (`cardSurfaceAlpha`)
+ *   so text, SHA-256 digests, and QR codes are always read without distraction or stacked blur.
  */
 @Immutable
 data class LiquidGlassTokens(
@@ -118,40 +209,40 @@ fun rememberLiquidGlassTokens(
 
     val barSurfaceAlpha = when {
         reduceTransparency -> 0.98f
-        isGlassMode -> customization.glassOpacity.coerceIn(0.72f, 0.90f)
-        isDark -> 0.84f
-        else -> 0.88f
+        isGlassMode -> customization.glassOpacity.coerceIn(0.76f, 0.92f)
+        isDark -> 0.88f
+        else -> 0.92f
     }
 
-    // Content cards prioritize legibility and WCAG contrast while keeping subtle depth
+    // Content cards stay opaque or near-opaque to guarantee distraction-free reading
     val cardSurfaceAlpha = when {
         reduceTransparency -> 1.0f
         isGlassMode -> if (isDark) {
-            customization.glassOpacity.coerceIn(0.78f, 0.94f)
+            customization.glassOpacity.coerceIn(0.90f, 0.98f)
         } else {
-            customization.glassOpacity.coerceIn(0.85f, 0.96f)
+            customization.glassOpacity.coerceIn(0.94f, 0.99f)
         }
-        else -> customization.materialSurfaceContrast.coerceIn(0.92f, 1.0f)
+        else -> customization.materialSurfaceContrast.coerceIn(0.96f, 1.0f)
     }
 
     val specularRimAlpha = when {
-        reduceTransparency -> 0.16f
-        isGlassMode -> (customization.glassSpecularIntensity * (if (isDark) 0.55f else 0.45f)).coerceIn(0.12f, 0.60f)
-        isDark -> 0.22f
-        else -> 0.18f
+        reduceTransparency -> 0.14f
+        isGlassMode -> (customization.glassSpecularIntensity * (if (isDark) 0.50f else 0.40f)).coerceIn(0.14f, 0.52f)
+        isDark -> 0.20f
+        else -> 0.16f
     }
 
     val innerMeniscusAlpha = when {
         reduceTransparency || !customization.glassInnerHighlightEnabled -> 0f
-        isGlassMode -> if (isDark) 0.24f else 0.42f
-        isDark -> 0.12f
-        else -> 0.22f
+        isGlassMode -> if (isDark) 0.22f else 0.36f
+        isDark -> 0.10f
+        else -> 0.18f
     }
 
     val refractionTintAlpha = when {
         reduceTransparency -> 0f
-        isGlassMode -> (customization.glassRefractionGlow * 0.14f).coerceIn(0f, 0.16f)
-        else -> 0.04f
+        isGlassMode -> (customization.glassRefractionGlow * 0.12f).coerceIn(0f, 0.12f)
+        else -> 0.03f
     }
 
     return remember(
@@ -199,9 +290,8 @@ internal fun resolveSystemAccessibilityFlags(context: Context): Pair<Boolean, Bo
 }
 
 /**
- * Cached GPU-friendly modifier that renders a refined Liquid Glass specular rim,
- * subtle diagonal chromatic refraction sheen, and a 1dp top inner meniscus highlight
- * without per-frame object allocations.
+ * Cached GPU-friendly modifier for floating bars, pills, and active indicators.
+ * Renders a directional 1dp specular rim and top inner meniscus without per-frame allocations.
  */
 fun Modifier.liquidGlassRimAndHighlight(
     cornerRadius: Dp,
@@ -219,13 +309,13 @@ fun Modifier.liquidGlassRimAndHighlight(
     val rimHighlightColor = if (isDark) {
         Color.White.copy(alpha = specularAlpha)
     } else {
-        Color.White.copy(alpha = (specularAlpha * 1.35f).coerceAtMost(0.75f))
+        Color.White.copy(alpha = (specularAlpha * 1.3f).coerceAtMost(0.70f))
     }
-    val rimMidColor = accentColor.copy(alpha = (specularAlpha * 0.55f).coerceAtMost(0.35f))
+    val rimMidColor = accentColor.copy(alpha = (specularAlpha * 0.50f).coerceAtMost(0.32f))
     val rimShadowColor = if (isDark) {
-        Color.White.copy(alpha = (specularAlpha * 0.18f).coerceAtLeast(0.05f))
+        Color.White.copy(alpha = (specularAlpha * 0.16f).coerceAtLeast(0.05f))
     } else {
-        accentColor.copy(alpha = (specularAlpha * 0.28f).coerceAtLeast(0.08f))
+        accentColor.copy(alpha = (specularAlpha * 0.24f).coerceAtLeast(0.07f))
     }
 
     val rimBrush = Brush.linearGradient(
@@ -237,11 +327,11 @@ fun Modifier.liquidGlassRimAndHighlight(
     val sheenBrush = if (refractionAlpha > 0.005f) {
         Brush.linearGradient(
             colors = listOf(
-                Color.White.copy(alpha = (refractionAlpha * 0.85f).coerceAtMost(0.14f)),
+                Color.White.copy(alpha = (refractionAlpha * 0.8f).coerceAtMost(0.10f)),
                 accentColor.copy(alpha = refractionAlpha),
                 Color.Transparent
             ),
-            start = Offset(0f, 0f),
+            start = Offset.Zero,
             end = Offset(size.width * 0.85f, size.height * 0.9f)
         )
     } else {
@@ -282,10 +372,9 @@ fun Modifier.liquidGlassRimAndHighlight(
 }
 
 /**
- * Adaptive app background container.
- * Maintains the clean Material 3 background tone while adding a subtle, calibrated
- * radial luminance atmosphere behind navigation and header zones when Liquid Glass
- * or ambient diffusion is active (automatically disabled in Reduced Transparency / AMOLED modes).
+ * Adaptive Material You app background.
+ * Keeps main screen background clean and high-contrast, adding only a subtle atmospheric
+ * luminance behind the top/bottom bar zones when explicitly enabled in settings.
  */
 @Composable
 fun AdaptiveAppBackground(
@@ -297,15 +386,10 @@ fun AdaptiveAppBackground(
     val tokens = rememberLiquidGlassTokens(custom)
 
     val showSubtleAtmosphere = !tokens.reduceTransparency &&
-        (tokens.isLiquidGlassMode || custom.glassAmbientOrbsEnabled)
-    val orbIntensity = if (custom.glassAmbientOrbsEnabled) {
-        (custom.glassAmbientOrbIntensity * 0.14f).coerceIn(0.03f, 0.14f)
-    } else {
-        0.06f
-    }
-
+        tokens.isLiquidGlassMode &&
+        custom.glassAmbientOrbsEnabled
+    val orbIntensity = (custom.glassAmbientOrbIntensity * 0.10f).coerceIn(0.02f, 0.10f)
     val primaryGlow = colorScheme.primary.copy(alpha = orbIntensity)
-    val secondaryGlow = colorScheme.secondary.copy(alpha = orbIntensity * 0.75f)
 
     Box(
         modifier = modifier
@@ -314,25 +398,15 @@ fun AdaptiveAppBackground(
             .then(
                 if (showSubtleAtmosphere) {
                     Modifier.drawBehind {
-                        val topRadius = size.minDimension * 0.72f
+                        val radius = size.minDimension * 0.65f
                         drawCircle(
                             brush = Brush.radialGradient(
                                 colors = listOf(primaryGlow, Color.Transparent),
-                                center = Offset(size.width * 0.82f, size.height * 0.08f),
-                                radius = topRadius
+                                center = Offset(size.width * 0.8f, size.height * 0.08f),
+                                radius = radius
                             ),
-                            radius = topRadius,
-                            center = Offset(size.width * 0.82f, size.height * 0.08f)
-                        )
-                        val bottomRadius = size.minDimension * 0.68f
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(secondaryGlow, Color.Transparent),
-                                center = Offset(size.width * 0.18f, size.height * 0.92f),
-                                radius = bottomRadius
-                            ),
-                            radius = bottomRadius,
-                            center = Offset(size.width * 0.18f, size.height * 0.92f)
+                            radius = radius,
+                            center = Offset(size.width * 0.8f, size.height * 0.08f)
                         )
                     }
                 } else {
@@ -345,33 +419,26 @@ fun AdaptiveAppBackground(
 }
 
 /**
- * Reusable Liquid Glass Surface for floating navigation bars, top bars, and contextual chrome.
- * Combines high-contrast frosted translucency with a delicate specular rim and top meniscus.
+ * Reusable Liquid Glass Surface reserved for floating navigation bars and contextual chrome.
  */
 @Composable
 fun LiquidGlassBarSurface(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 22.dp,
+    cornerRadius: Dp = 24.dp,
     accentTint: Color = MaterialTheme.colorScheme.primary,
-    tonalElevation: Dp = 2.dp,
-    shadowElevation: Dp = 4.dp,
+    tonalElevation: Dp = 3.dp,
+    shadowElevation: Dp = 5.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val tokens = rememberLiquidGlassTokens()
     val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
 
-    val baseSurfaceColor = if (tokens.isDark) {
-        colorScheme.surface.copy(alpha = tokens.barSurfaceAlpha)
-    } else {
-        colorScheme.surface.copy(alpha = tokens.barSurfaceAlpha)
-    }
-
     Surface(
         shape = shape,
-        color = baseSurfaceColor,
+        color = colorScheme.surface.copy(alpha = tokens.barSurfaceAlpha),
         contentColor = colorScheme.onSurface,
-        tonalElevation = if (tokens.reduceTransparency) 3.dp else tonalElevation,
+        tonalElevation = if (tokens.reduceTransparency) 4.dp else tonalElevation,
         shadowElevation = if (tokens.reduceTransparency) 2.dp else shadowElevation,
         modifier = modifier
             .clip(shape)
@@ -379,7 +446,7 @@ fun LiquidGlassBarSurface(
                 cornerRadius = cornerRadius,
                 accentColor = accentTint,
                 isDark = tokens.isDark,
-                specularAlpha = (tokens.specularRimAlpha * 1.15f).coerceAtMost(0.65f),
+                specularAlpha = tokens.specularRimAlpha,
                 meniscusAlpha = tokens.innerMeniscusAlpha,
                 refractionAlpha = tokens.refractionTintAlpha
             )
@@ -389,8 +456,8 @@ fun LiquidGlassBarSurface(
 }
 
 /**
- * Reusable Liquid Glass Floating Pill for camera HUD controls (Flash, Quick Zoom, Telemetry overlay)
- * and contextual toolbar chips. Supports normal, pressed, selected, and focused states.
+ * Reusable Liquid Glass Floating Pill for camera HUD overlays and toolbar status pills.
+ * Supports normal, pressed, selected, disabled, and focused states with optional haptic feedback.
  */
 @Composable
 fun LiquidGlassPill(
@@ -399,6 +466,7 @@ fun LiquidGlassPill(
     selected: Boolean = false,
     enabled: Boolean = true,
     isDarkHud: Boolean = false,
+    hapticOnClick: Boolean = true,
     cornerRadius: Dp = 10.dp,
     accentColor: Color = MaterialTheme.colorScheme.primary,
     contentPadding: PaddingValues = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -406,13 +474,14 @@ fun LiquidGlassPill(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val tokens = rememberLiquidGlassTokens()
+    val haptics = rememberOptiShareHaptics()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val isFocused by interactionSource.collectIsFocusedAsState()
     val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && !tokens.reduceMotion) 0.96f else 1.0f,
+        targetValue = if (isPressed && enabled && !tokens.reduceMotion) 0.96f else 1.0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium
@@ -421,13 +490,15 @@ fun LiquidGlassPill(
     )
 
     val targetContainerColor = when {
-        isDarkHud && selected -> accentColor.copy(alpha = if (tokens.reduceTransparency) 0.96f else 0.84f)
-        isDarkHud -> Color(0xFF0B0E14).copy(alpha = if (tokens.reduceTransparency) 0.92f else 0.72f)
-        selected -> colorScheme.secondaryContainer.copy(alpha = if (tokens.reduceTransparency) 1.0f else 0.88f)
-        else -> colorScheme.surfaceVariant.copy(alpha = if (tokens.reduceTransparency) 0.95f else 0.65f)
+        !enabled -> colorScheme.surfaceVariant.copy(alpha = 0.38f)
+        isDarkHud && selected -> accentColor.copy(alpha = if (tokens.reduceTransparency) 0.96f else 0.86f)
+        isDarkHud -> Color(0xFF0B0E14).copy(alpha = if (tokens.reduceTransparency) 0.92f else 0.74f)
+        selected -> colorScheme.secondaryContainer.copy(alpha = if (tokens.reduceTransparency) 1.0f else 0.90f)
+        else -> colorScheme.surfaceVariant.copy(alpha = if (tokens.reduceTransparency) 0.95f else 0.70f)
     }
 
     val targetContentColor = when {
+        !enabled -> colorScheme.onSurface.copy(alpha = 0.38f)
         isDarkHud -> Color.White
         selected -> colorScheme.onSecondaryContainer
         else -> colorScheme.onSurfaceVariant
@@ -445,9 +516,10 @@ fun LiquidGlassPill(
     )
 
     val effectiveSpecular = when {
+        !enabled -> 0.08f
         isFocused -> (tokens.specularRimAlpha * 1.6f).coerceAtMost(0.85f)
-        selected -> (tokens.specularRimAlpha * 1.35f).coerceAtMost(0.70f)
-        isDarkHud -> 0.34f
+        selected -> (tokens.specularRimAlpha * 1.3f).coerceAtMost(0.65f)
+        isDarkHud -> 0.32f
         else -> tokens.specularRimAlpha
     }
 
@@ -462,13 +534,16 @@ fun LiquidGlassPill(
             accentColor = if (selected || isFocused) accentColor else colorScheme.outlineVariant,
             isDark = isDarkHud || tokens.isDark,
             specularAlpha = effectiveSpecular,
-            meniscusAlpha = if (selected || isDarkHud) tokens.innerMeniscusAlpha else tokens.innerMeniscusAlpha * 0.5f,
+            meniscusAlpha = if (selected || isDarkHud) tokens.innerMeniscusAlpha else 0f,
             refractionAlpha = if (selected) tokens.refractionTintAlpha else 0f
         )
 
     if (onClick != null) {
         Surface(
-            onClick = onClick,
+            onClick = {
+                if (hapticOnClick) haptics.selectionTick()
+                onClick()
+            },
             enabled = enabled,
             shape = shape,
             color = containerColor,
@@ -502,8 +577,9 @@ fun LiquidGlassPill(
 
 /**
  * Primary Content Card surface (`OptiShareCard`).
- * Prioritizes high contrast and legibility for main content, telemetry, and QR stages,
- * while applying delicate Liquid Glass rim/meniscus refinement when appropriate.
+ * Uses solid/high-contrast Material You tonal surfaces (`colorScheme.surface` + crisp border)
+ * so primary content, QR codes, SHA-256 digests, and long texts remain 100% legible without
+ * stacked transparency or distracting glass reflections.
  */
 @Composable
 fun OptiShareCard(
@@ -523,38 +599,31 @@ fun OptiShareCard(
     }
     val shape = remember(radiusDp) { RoundedCornerShape(radiusDp) }
 
-    val containerColor = when {
-        tokens.isLiquidGlassMode -> {
-            colorScheme.surface.copy(alpha = tokens.cardSurfaceAlpha)
-        }
-        isHighlighted -> {
-            colorScheme.surface
-        }
-        else -> {
-            colorScheme.surface.copy(alpha = tokens.cardSurfaceAlpha)
-        }
+    val containerColor = if (isHighlighted) {
+        colorScheme.surface
+    } else {
+        colorScheme.surface.copy(alpha = tokens.cardSurfaceAlpha)
     }
-
-    val resolvedAccent = accentTint ?: colorScheme.primary
 
     val borderColor = when {
         isHighlighted && accentTint != null -> accentTint.copy(alpha = 0.55f)
         isHighlighted -> colorScheme.primary.copy(alpha = 0.45f)
-        else -> colorScheme.outlineVariant.copy(alpha = 0.62f)
+        else -> colorScheme.outlineVariant.copy(alpha = 0.65f)
     }
 
-    val useGlassRim = tokens.isLiquidGlassMode || isHighlighted
-    val borderStroke = if (!useGlassRim && custom.materialBorderWidthDp > 0.05f) {
-        BorderStroke(
-            width = custom.materialBorderWidthDp.dp,
-            color = borderColor
-        )
+    val borderWidth = if (tokens.isLiquidGlassMode) {
+        1.dp
+    } else {
+        custom.materialBorderWidthDp.dp
+    }
+
+    val borderStroke = if (borderWidth > 0.05.dp) {
+        BorderStroke(width = borderWidth, color = borderColor)
     } else {
         null
     }
 
     val tonalElevation = when {
-        tokens.isLiquidGlassMode -> 1.dp
         !custom.materialUseTonalElevation -> 0.dp
         isHighlighted -> 3.dp
         else -> 1.dp
@@ -570,33 +639,7 @@ fun OptiShareCard(
             defaultElevation = tonalElevation
         ),
         border = borderStroke,
-        modifier = modifier.then(
-            if (useGlassRim) {
-                Modifier.liquidGlassRimAndHighlight(
-                    cornerRadius = radiusDp,
-                    accentColor = if (isHighlighted) resolvedAccent else colorScheme.outlineVariant,
-                    isDark = tokens.isDark,
-                    specularAlpha = if (tokens.isLiquidGlassMode) {
-                        tokens.specularRimAlpha
-                    } else {
-                        (tokens.specularRimAlpha * 0.75f).coerceAtLeast(0.14f)
-                    },
-                    meniscusAlpha = if (tokens.isLiquidGlassMode || isHighlighted) {
-                        tokens.innerMeniscusAlpha
-                    } else {
-                        0f
-                    },
-                    refractionAlpha = if (tokens.isLiquidGlassMode && isHighlighted) {
-                        tokens.refractionTintAlpha
-                    } else {
-                        0f
-                    },
-                    borderWidth = if (tokens.isLiquidGlassMode) 1.dp else custom.materialBorderWidthDp.coerceAtLeast(0.8f).dp
-                )
-            } else {
-                Modifier
-            }
-        ),
+        modifier = modifier,
         content = content
     )
 }
@@ -649,8 +692,9 @@ fun SectionHeaderRow(
 }
 
 /**
- * Segmented Selector Bar refined with a recessed translucent glass track and
- * a floating specular-rimmed active capsule indicator.
+ * Material You + Liquid Glass Segmented Selector Bar:
+ * Recessed translucent track with a specular-rimmed active indicator capsule,
+ * full state support (normal, pressed, selected, focus), and native selection haptics.
  */
 @Composable
 fun <T> SegmentedSelectorBar(
@@ -662,6 +706,7 @@ fun <T> SegmentedSelectorBar(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val tokens = rememberLiquidGlassTokens()
+    val haptics = rememberOptiShareHaptics()
     val outerRadius = 13.dp
     val itemRadius = 10.dp
     val outerShape = remember { RoundedCornerShape(outerRadius) }
@@ -669,8 +714,8 @@ fun <T> SegmentedSelectorBar(
 
     val trackAlpha = when {
         tokens.reduceTransparency -> 0.85f
-        tokens.isLiquidGlassMode -> 0.45f
-        else -> 0.55f
+        tokens.isLiquidGlassMode -> 0.48f
+        else -> 0.56f
     }
 
     Surface(
@@ -678,7 +723,7 @@ fun <T> SegmentedSelectorBar(
         color = colorScheme.surfaceVariant.copy(alpha = trackAlpha),
         border = BorderStroke(
             width = 1.dp,
-            color = colorScheme.outlineVariant.copy(alpha = if (tokens.isLiquidGlassMode) 0.45f else 0.6f)
+            color = colorScheme.outlineVariant.copy(alpha = 0.55f)
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -692,6 +737,7 @@ fun <T> SegmentedSelectorBar(
                 val isSelected = item == selectedItem
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
+                val isFocused by interactionSource.collectIsFocusedAsState()
 
                 val itemScale by animateFloatAsState(
                     targetValue = if (isPressed && !tokens.reduceMotion) 0.97f else 1.0f,
@@ -706,8 +752,7 @@ fun <T> SegmentedSelectorBar(
                     targetValue = when {
                         !isSelected -> Color.Transparent
                         tokens.reduceTransparency -> colorScheme.secondaryContainer
-                        tokens.isLiquidGlassMode -> colorScheme.secondaryContainer.copy(alpha = 0.84f)
-                        else -> colorScheme.secondaryContainer.copy(alpha = 0.92f)
+                        else -> colorScheme.secondaryContainer.copy(alpha = 0.90f)
                     },
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "SegmentedBg120Hz"
@@ -718,7 +763,12 @@ fun <T> SegmentedSelectorBar(
                     label = "SegmentedFg120Hz"
                 )
                 Surface(
-                    onClick = { onItemSelected(item) },
+                    onClick = {
+                        if (!isSelected) {
+                            haptics.selectionTick()
+                            onItemSelected(item)
+                        }
+                    },
                     shape = itemShape,
                     color = bgColor,
                     contentColor = fgColor,
@@ -733,14 +783,18 @@ fun <T> SegmentedSelectorBar(
                             scaleY = itemScale
                         }
                         .then(
-                            if (isSelected) {
+                            if (isSelected || isFocused) {
                                 Modifier.liquidGlassRimAndHighlight(
                                     cornerRadius = itemRadius,
                                     accentColor = colorScheme.primary,
                                     isDark = tokens.isDark,
-                                    specularAlpha = (tokens.specularRimAlpha * 1.15f).coerceAtMost(0.55f),
+                                    specularAlpha = if (isFocused) {
+                                        (tokens.specularRimAlpha * 1.4f).coerceAtMost(0.65f)
+                                    } else {
+                                        tokens.specularRimAlpha
+                                    },
                                     meniscusAlpha = tokens.innerMeniscusAlpha,
-                                    refractionAlpha = tokens.refractionTintAlpha * 0.6f
+                                    refractionAlpha = tokens.refractionTintAlpha * 0.5f
                                 )
                             } else {
                                 Modifier
@@ -772,7 +826,6 @@ fun <T> SegmentedSelectorBar(
 
 /**
  * Tonal Material 3 Metric Cell for displaying structured transfer statistics.
- * Maintains strong contrast for monospace telemetry values.
  */
 @Composable
 fun TelemetryMetricCell(
@@ -782,19 +835,11 @@ fun TelemetryMetricCell(
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val tokens = rememberLiquidGlassTokens()
     val shape = remember { RoundedCornerShape(10.dp) }
 
     Surface(
         shape = shape,
-        color = colorScheme.surfaceVariant.copy(
-            alpha = if (tokens.reduceTransparency) 0.75f else 0.44f
-        ),
-        border = if (tokens.isLiquidGlassMode) {
-            BorderStroke(0.8.dp, colorScheme.outlineVariant.copy(alpha = 0.38f))
-        } else {
-            null
-        },
+        color = colorScheme.surfaceVariant.copy(alpha = 0.45f),
         modifier = modifier
     ) {
         Column(
@@ -824,8 +869,8 @@ fun TelemetryMetricCell(
 }
 
 /**
- * Accessible Material 3 Action Button (48dp minimum touch height) with subtle press physics,
- * delicate top meniscus highlight on primary actions, and guaranteed single-line labels.
+ * Accessible Material 3 Action Button (48dp minimum touch height) with subtle press physics
+ * and optional haptic feedback for primary state transitions.
  */
 @Composable
 fun InstrumentActionButton(
@@ -834,10 +879,12 @@ fun InstrumentActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isPrimary: Boolean = false,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    hapticOnClick: Boolean = false
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val tokens = rememberLiquidGlassTokens()
+    val haptics = rememberOptiShareHaptics()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val buttonRadius = 12.dp
@@ -854,7 +901,10 @@ fun InstrumentActionButton(
 
     if (isPrimary) {
         Button(
-            onClick = onClick,
+            onClick = {
+                if (hapticOnClick) haptics.toggle(true)
+                onClick()
+            },
             enabled = enabled,
             shape = buttonShape,
             interactionSource = interactionSource,
@@ -882,17 +932,16 @@ fun InstrumentActionButton(
         }
     } else {
         FilledTonalButton(
-            onClick = onClick,
+            onClick = {
+                if (hapticOnClick) haptics.selectionTick()
+                onClick()
+            },
             enabled = enabled,
             shape = buttonShape,
             interactionSource = interactionSource,
             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
             colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = if (tokens.isLiquidGlassMode && !tokens.reduceTransparency) {
-                    colorScheme.secondaryContainer.copy(alpha = 0.82f)
-                } else {
-                    colorScheme.secondaryContainer
-                },
+                containerColor = colorScheme.secondaryContainer,
                 contentColor = colorScheme.onSecondaryContainer
             ),
             modifier = modifier
@@ -901,20 +950,6 @@ fun InstrumentActionButton(
                     scaleX = scale
                     scaleY = scale
                 }
-                .then(
-                    if (tokens.isLiquidGlassMode && enabled) {
-                        Modifier.liquidGlassRimAndHighlight(
-                            cornerRadius = buttonRadius,
-                            accentColor = colorScheme.primary,
-                            isDark = tokens.isDark,
-                            specularAlpha = tokens.specularRimAlpha * 0.85f,
-                            meniscusAlpha = tokens.innerMeniscusAlpha * 0.7f,
-                            refractionAlpha = 0f
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
         ) {
             Icon(
                 imageVector = icon,

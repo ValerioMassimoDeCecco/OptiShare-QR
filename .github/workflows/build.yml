@@ -1,4 +1,4 @@
-name: Android build & Release v1.0.3
+name: Android build & Release v1.04
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
       - name: Assemble installable debug APK and unsigned release APK
         run: |
           ./gradlew --no-daemon assembleDebug assembleRelease
-          cp -f app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk
+          cp -f app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/OptiShare-QR-v1.04.apk
 
       - name: List generated APKs
         run: |
@@ -45,24 +45,24 @@ jobs:
       - name: Upload installable APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: optishare-qr-v1.0.3-apks
+          name: optishare-qr-v1.04-apks
           path: |
-            app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk
+            app/build/outputs/apk/debug/OptiShare-QR-v1.04.apk
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
-      - name: Publish v1.0.3 to GitHub Releases
+      - name: Publish v1.04 to GitHub Releases
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELEASE_TAG="v1.0.3"
+          RELEASE_TAG="v1.04"
           if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
             RELEASE_TAG="${GITHUB_REF_NAME}"
           fi
 
-          # Ensure tag v1.0.3 exists on the repository so F-Droid and GitHub Releases can track it
+          # Ensure tag v1.04 exists on the repository so F-Droid and GitHub Releases can track it
           if ! git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -70,10 +70,10 @@ jobs:
             git push origin "$RELEASE_TAG" || true
           fi
 
-          NOTES_FILE="fastlane/metadata/android/it/changelogs/3.txt"
+          NOTES_FILE="fastlane/metadata/android/it/changelogs/4.txt"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" \
-              app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+              app/build/outputs/apk/debug/OptiShare-QR-v1.04.apk \
               app/build/outputs/apk/debug/app-debug.apk \
               app/build/outputs/apk/release/app-release-unsigned.apk \
               --clobber
@@ -85,14 +85,14 @@ jobs:
           else
             if [ -f "$NOTES_FILE" ]; then
               gh release create "$RELEASE_TAG" \
-                app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+                app/build/outputs/apk/debug/OptiShare-QR-v1.04.apk \
                 app/build/outputs/apk/debug/app-debug.apk \
                 app/build/outputs/apk/release/app-release-unsigned.apk \
                 --title "OptiShare QR $RELEASE_TAG" \
                 --notes-file "$NOTES_FILE"
             else
               gh release create "$RELEASE_TAG" \
-                app/build/outputs/apk/debug/OptiShare-QR-v1.0.3.apk \
+                app/build/outputs/apk/debug/OptiShare-QR-v1.04.apk \
                 app/build/outputs/apk/debug/app-debug.apk \
                 app/build/outputs/apk/release/app-release-unsigned.apk \
                 --title "OptiShare QR $RELEASE_TAG" \

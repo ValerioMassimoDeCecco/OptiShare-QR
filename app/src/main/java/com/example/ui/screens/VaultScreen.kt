@@ -73,6 +73,7 @@ import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
+import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import java.io.File
 import java.text.SimpleDateFormat
@@ -89,6 +90,7 @@ fun VaultScreen(
 ) {
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
 
     var selectedFilter by rememberSaveable { mutableStateOf("ALL") }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -304,6 +306,7 @@ fun VaultScreen(
                             record = activeRecord,
                             isDigestCopied = copiedDigestId == activeRecord.id,
                             onCopyDigest = {
+                                haptics.confirmSuccess()
                                 copyHashToClipboard(context, activeRecord.sha256Hash)
                                 copiedDigestId = activeRecord.id
                             },
@@ -333,9 +336,11 @@ fun VaultScreen(
                             isExpanded = selectedRecordId == record.id,
                             isDigestCopied = copiedDigestId == record.id,
                             onToggleExpand = {
+                                haptics.selectionTick()
                                 selectedRecordId = if (selectedRecordId == record.id) null else record.id
                             },
                             onCopyDigest = {
+                                haptics.confirmSuccess()
                                 copyHashToClipboard(context, record.sha256Hash)
                                 copiedDigestId = record.id
                             },

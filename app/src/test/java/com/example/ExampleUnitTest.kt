@@ -2,6 +2,11 @@ package com.example
 
 import com.example.domain.protocol.OpticalPacketProtocol
 import com.example.domain.protocol.PacketKind
+import com.example.ui.components.LiquidGlassTokens
+import com.example.ui.theme.AccentPalettePreset
+import com.example.ui.theme.AppCustomizationState
+import com.example.ui.theme.DesignStyle
+import com.example.ui.theme.ThemeModeOption
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -81,9 +86,41 @@ class ExampleUnitTest {
             rawBytes = raw
         )
         val validQr = OpticalPacketProtocol.encodePacketToQrString(stream.dataPackets.first())
-        // Tamper with the CRC32 hex field
         val tamperedQr = validQr.replace(stream.dataPackets.first().crc32Hex, "00000000")
         val decodeResult = OpticalPacketProtocol.decodePacketFromQrString(tamperedQr)
         assertTrue(decodeResult.isFailure)
+    }
+
+    @Test
+    fun liquidGlassTokens_andCustomizationState_maintainLegibleContrastBounds() {
+        val defaultState = AppCustomizationState()
+        assertEquals(DesignStyle.MATERIAL, defaultState.designStyle)
+        assertTrue(defaultState.glassOpacity in 0.65f..0.95f)
+
+        val glassState = defaultState.copy(
+            designStyle = DesignStyle.LIQUID_GLASS,
+            themeMode = ThemeModeOption.DARK,
+            palette = AccentPalettePreset.SIGNAL_COBALT,
+            glassOpacity = 0.78f,
+            glassSpecularIntensity = 0.40f,
+            glassRefractionGlow = 0.18f,
+            glassInnerHighlightEnabled = true
+        )
+        assertEquals(DesignStyle.LIQUID_GLASS, glassState.designStyle)
+
+        val tokens = LiquidGlassTokens(
+            isDark = true,
+            isLiquidGlassMode = true,
+            reduceTransparency = false,
+            reduceMotion = false,
+            supportsRenderEffect = true,
+            barSurfaceAlpha = glassState.glassOpacity.coerceIn(0.72f, 0.90f),
+            cardSurfaceAlpha = glassState.glassOpacity.coerceIn(0.78f, 0.94f),
+            specularRimAlpha = 0.22f,
+            innerMeniscusAlpha = 0.24f,
+            refractionTintAlpha = 0.03f
+        )
+        assertTrue("Bar surface alpha must remain legible", tokens.barSurfaceAlpha >= 0.72f)
+        assertTrue("Card surface alpha must preserve WCAG readability", tokens.cardSurfaceAlpha >= 0.78f)
     }
 }

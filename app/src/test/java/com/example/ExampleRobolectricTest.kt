@@ -1,21 +1,16 @@
 package com.example
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
+import com.example.ui.theme.AppCustomizationState
+import com.example.ui.theme.DesignStyle
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
 class ExampleRobolectricTest {
 
-  @Test
-  fun `read string from context`() {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val appName = context.getString(R.string.app_name)
-    assertEquals("My Application", appName)
-  }
+    @Test
+    fun `default customization preserves material and liquid glass parameters`() {
+        val state = AppCustomizationState()
+        assertEquals(DesignStyle.MATERIAL, state.designStyle)
+        assertEquals(16, state.glassCornerRadiusDp)
+    }
 }

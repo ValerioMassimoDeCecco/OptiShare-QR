@@ -17,6 +17,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -90,6 +93,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.local.AppDatabase
 import com.example.data.repository.TransferRepository
 import com.example.ui.components.AdaptiveAppBackground
+import com.example.ui.components.LiquidGlassBarSurface
+import com.example.ui.components.liquidGlassRimAndHighlight
+import com.example.ui.components.rememberLiquidGlassTokens
 import com.example.ui.screens.ReceiveScanScreen
 import com.example.ui.screens.SendQrScreen
 import com.example.ui.screens.SettingsScreen
@@ -245,6 +251,7 @@ fun OptiShareApp(
 
     val isLiquidGlass = customization.designStyle == DesignStyle.LIQUID_GLASS
     val colorScheme = MaterialTheme.colorScheme
+    val glassTokens = rememberLiquidGlassTokens(customization)
 
     AdaptiveAppBackground {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -262,9 +269,19 @@ fun OptiShareApp(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = colorScheme.primaryContainer,
-                                        contentColor = colorScheme.onPrimaryContainer
+                                        shape = RoundedCornerShape(11.dp),
+                                        color = colorScheme.primaryContainer.copy(
+                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.88f
+                                        ),
+                                        contentColor = colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.liquidGlassRimAndHighlight(
+                                            cornerRadius = 11.dp,
+                                            accentColor = colorScheme.primary,
+                                            isDark = glassTokens.isDark,
+                                            specularAlpha = glassTokens.specularRimAlpha,
+                                            meniscusAlpha = glassTokens.innerMeniscusAlpha,
+                                            refractionAlpha = 0f
+                                        )
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.QrCode2,
@@ -313,12 +330,22 @@ fun OptiShareApp(
                                     shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = colorScheme.secondaryContainer,
+                                        containerColor = colorScheme.secondaryContainer.copy(
+                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.82f
+                                        ),
                                         contentColor = colorScheme.onSecondaryContainer
                                     ),
                                     modifier = Modifier
                                         .padding(end = 12.dp)
                                         .defaultMinSize(minHeight = 40.dp)
+                                        .liquidGlassRimAndHighlight(
+                                            cornerRadius = 12.dp,
+                                            accentColor = colorScheme.primary,
+                                            isDark = glassTokens.isDark,
+                                            specularAlpha = (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.6f),
+                                            meniscusAlpha = glassTokens.innerMeniscusAlpha,
+                                            refractionAlpha = glassTokens.refractionTintAlpha * 0.5f
+                                        )
                                         .testTag("quick_style_toggle_button")
                                 ) {
                                     Icon(
@@ -328,7 +355,7 @@ fun OptiShareApp(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (isLiquidGlass) "Glass" else "Material 3",
+                                        text = if (isLiquidGlass) "Liquid Glass" else "Material 3",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         maxLines = 1,
@@ -337,13 +364,17 @@ fun OptiShareApp(
                                 }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = colorScheme.background,
+                                containerColor = colorScheme.surface.copy(alpha = glassTokens.barSurfaceAlpha),
                                 titleContentColor = colorScheme.onBackground
                             )
                         )
                         HorizontalDivider(
                             thickness = 1.dp,
-                            color = colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            color = if (isLiquidGlass) {
+                                colorScheme.primary.copy(alpha = 0.22f)
+                            } else {
+                                colorScheme.outlineVariant.copy(alpha = 0.55f)
+                            }
                         )
                     }
                 }
@@ -357,7 +388,7 @@ fun OptiShareApp(
                         if (isExpandedScreen) {
                             Row(modifier = Modifier.fillMaxHeight()) {
                                 NavigationRail(
-                                    containerColor = colorScheme.surface,
+                                    containerColor = colorScheme.surface.copy(alpha = glassTokens.barSurfaceAlpha),
                                     contentColor = colorScheme.onSurface,
                                     modifier = Modifier.padding(vertical = 8.dp)
                                 ) {
@@ -377,13 +408,17 @@ fun OptiShareApp(
                                                 Text(
                                                     text = stringResource(tab.titleRes),
                                                     style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
+                                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    softWrap = false
                                                 )
                                             },
                                             colors = NavigationRailItemDefaults.colors(
                                                 selectedIconColor = colorScheme.onSecondaryContainer,
                                                 selectedTextColor = colorScheme.onSurface,
-                                                indicatorColor = colorScheme.secondaryContainer,
+                                                indicatorColor = colorScheme.secondaryContainer.copy(
+                                                    alpha = if (glassTokens.reduceTransparency) 1f else 0.86f
+                                                ),
                                                 unselectedIconColor = colorScheme.onSurfaceVariant,
                                                 unselectedTextColor = colorScheme.onSurfaceVariant
                                             ),
@@ -396,7 +431,11 @@ fun OptiShareApp(
                                 }
                                 VerticalDivider(
                                     thickness = 1.dp,
-                                    color = colorScheme.outlineVariant.copy(alpha = 0.55f)
+                                    color = if (isLiquidGlass) {
+                                        colorScheme.primary.copy(alpha = 0.22f)
+                                    } else {
+                                        colorScheme.outlineVariant.copy(alpha = 0.55f)
+                                    }
                                 )
                             }
                         }
@@ -558,9 +597,10 @@ fun OptiShareApp(
 }
 
 /**
- * Material You Floating Bottom Navigation Bar:
- * Detached from the screen edges with balanced rounded corners (22dp),
- * 120Hz spring-interpolated selection states, and GPU-accelerated graphicsLayer scaling.
+ * Floating Bottom Navigation Bar with iOS-inspired Liquid Glass refinement:
+ * Detached from the screen edges with balanced 24dp corners, frosted translucency,
+ * directional specular rim, top 1dp meniscus highlight, and 120Hz spring states
+ * (normal, pressed, selected, and focused).
  */
 @Composable
 private fun FloatingMaterialNavigationBar(
@@ -569,16 +609,15 @@ private fun FloatingMaterialNavigationBar(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val barShape = remember { RoundedCornerShape(22.dp) }
-    val itemShape = remember { RoundedCornerShape(14.dp) }
+    val glassTokens = rememberLiquidGlassTokens()
+    val itemRadius = 16.dp
+    val itemShape = remember { RoundedCornerShape(itemRadius) }
 
-    Surface(
-        shape = barShape,
-        color = colorScheme.surface,
-        contentColor = colorScheme.onSurface,
+    LiquidGlassBarSurface(
+        cornerRadius = 24.dp,
+        accentTint = colorScheme.primary,
         tonalElevation = 3.dp,
-        shadowElevation = 5.dp,
-        border = BorderStroke(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f)),
+        shadowElevation = 6.dp,
         modifier = modifier
             .widthIn(max = 460.dp)
             .fillMaxWidth()
@@ -594,9 +633,16 @@ private fun FloatingMaterialNavigationBar(
             OptiShareTab.entries.forEach { tab ->
                 val selected = currentTab == tab
                 val labelText = stringResource(tab.titleRes)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val isFocused by interactionSource.collectIsFocusedAsState()
 
                 val itemContainerColor by animateColorAsState(
-                    targetValue = if (selected) colorScheme.secondaryContainer else Color.Transparent,
+                    targetValue = when {
+                        !selected -> Color.Transparent
+                        glassTokens.reduceTransparency -> colorScheme.secondaryContainer
+                        else -> colorScheme.secondaryContainer.copy(alpha = 0.82f)
+                    },
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "NavTabContainer120Hz"
                 )
@@ -606,7 +652,11 @@ private fun FloatingMaterialNavigationBar(
                     label = "NavTabContent120Hz"
                 )
                 val iconScale by animateFloatAsState(
-                    targetValue = if (selected) 1.06f else 1.0f,
+                    targetValue = when {
+                        isPressed && !glassTokens.reduceMotion -> 0.94f
+                        selected && !glassTokens.reduceMotion -> 1.06f
+                        else -> 1.0f
+                    },
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow
@@ -619,9 +669,28 @@ private fun FloatingMaterialNavigationBar(
                     shape = itemShape,
                     color = itemContainerColor,
                     contentColor = itemContentColor,
+                    interactionSource = interactionSource,
                     modifier = Modifier
                         .weight(1f)
                         .defaultMinSize(minHeight = 56.dp)
+                        .then(
+                            if (selected || isFocused) {
+                                Modifier.liquidGlassRimAndHighlight(
+                                    cornerRadius = itemRadius,
+                                    accentColor = colorScheme.primary,
+                                    isDark = glassTokens.isDark,
+                                    specularAlpha = if (isFocused) {
+                                        (glassTokens.specularRimAlpha * 1.5f).coerceAtMost(0.75f)
+                                    } else {
+                                        (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.55f)
+                                    },
+                                    meniscusAlpha = glassTokens.innerMeniscusAlpha,
+                                    refractionAlpha = glassTokens.refractionTintAlpha * 0.7f
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                         .semantics {
                             role = Role.Tab
                             this.selected = selected

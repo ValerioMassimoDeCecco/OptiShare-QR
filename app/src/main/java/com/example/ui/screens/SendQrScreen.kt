@@ -121,6 +121,7 @@ import com.example.domain.protocol.QrCodecEngine
 import com.example.domain.protocol.QrEccLevel
 import com.example.domain.protocol.StandardQrKind
 import com.example.ui.components.InstrumentActionButton
+import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SegmentedSelectorBar
 import com.example.ui.components.TelemetryMetricCell
@@ -1037,9 +1038,10 @@ private fun InAppPhotoCaptureDialog(
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.Black.copy(alpha = 0.6f),
+                        LiquidGlassPill(
+                            isDarkHud = true,
+                            cornerRadius = 9.dp,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(8.dp)
@@ -1048,7 +1050,8 @@ private fun InAppPhotoCaptureDialog(
                                 text = "Anteprima Fotocamera Live",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -1213,44 +1216,41 @@ private fun SourceToolbarPanel(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
+                    LiquidGlassPill(
                         onClick = onOpenEncryptionDialog,
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isEncrypted) colorScheme.tertiaryContainer else colorScheme.surfaceVariant,
+                        selected = isEncrypted,
+                        cornerRadius = 9.dp,
+                        accentColor = if (isEncrypted) colorScheme.tertiary else colorScheme.primary,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
                         modifier = Modifier.testTag("toggle_aes_encryption_chip")
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                                contentDescription = null,
-                                tint = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = if (isEncrypted) "AES-256 ON" else "AES-256 OFF",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isEncrypted) colorScheme.onTertiaryContainer else colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
+                        Icon(
+                            imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = null,
+                            tint = if (isEncrypted) colorScheme.tertiary else colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = if (isEncrypted) "AES-256 ON" else "AES-256 OFF",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isEncrypted) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = colorScheme.secondaryContainer
+                    LiquidGlassPill(
+                        selected = false,
+                        cornerRadius = 9.dp,
+                        accentColor = colorScheme.secondary,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = "GZIP · XOR",
                             style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onSecondaryContainer,
+                            color = colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            softWrap = false,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            softWrap = false
                         )
                     }
                 }

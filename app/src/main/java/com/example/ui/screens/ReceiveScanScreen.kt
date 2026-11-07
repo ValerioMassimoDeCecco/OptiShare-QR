@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -103,6 +104,7 @@ import com.example.data.local.TransferRecordEntity
 import com.example.domain.protocol.ChunkReceptionState
 import com.example.domain.protocol.QrCodecEngine
 import com.example.ui.components.InstrumentActionButton
+import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.theme.JetBrainsMonoFontFamily
@@ -579,7 +581,7 @@ private fun CameraScannerInstrumentPanel(
                         )
                     }
 
-                    // Top Hardware Camera Controls Overlay (Torch + 1x / 1.5x / 2x Quick Zoom)
+                    // Top Hardware Camera Controls Overlay (Liquid Glass HUD: Torch + 1x / 1.5x / 2x Quick Zoom)
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -588,43 +590,41 @@ private fun CameraScannerInstrumentPanel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Surface(
+                        LiquidGlassPill(
                             onClick = { isTorchOn = !isTorchOn },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isTorchOn) colorScheme.primary else Color.Black.copy(alpha = 0.65f),
-                            contentColor = Color.White,
+                            selected = isTorchOn,
+                            isDarkHud = true,
+                            cornerRadius = 10.dp,
+                            accentColor = colorScheme.primary,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             modifier = Modifier.testTag("camera_torch_toggle_button")
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                    contentDescription = "Torcia Flash",
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = if (isTorchOn) "Flash ON" else "Flash",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
+                            Icon(
+                                imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                contentDescription = "Torcia Flash",
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = if (isTorchOn) "Flash ON" else "Flash",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             listOf(1.0f to "1x", 1.5f to "1.5x", 2.0f to "2x").forEach { (ratio, label) ->
                                 val active = selectedZoomRatio == ratio
-                                Surface(
+                                LiquidGlassPill(
                                     onClick = { selectedZoomRatio = ratio },
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (active) colorScheme.primary else Color.Black.copy(alpha = 0.65f),
-                                    contentColor = Color.White,
+                                    selected = active,
+                                    isDarkHud = true,
+                                    cornerRadius = 9.dp,
+                                    accentColor = colorScheme.primary,
+                                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
                                     modifier = Modifier.testTag("camera_zoom_${label}_button")
                                 ) {
                                     Text(
@@ -632,23 +632,23 @@ private fun CameraScannerInstrumentPanel(
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1,
-                                        softWrap = false,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                        softWrap = false
                                     )
                                 }
                             }
                         }
                     }
 
-                    // Bottom Monospace Telemetry Overlay Bar
-                    Row(
+                    // Bottom Floating Liquid Glass Telemetry HUD Bar
+                    LiquidGlassPill(
+                        isDarkHud = true,
+                        cornerRadius = 11.dp,
+                        accentColor = bracketColor,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.72f))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         Text(
                             text = receiverState.lastScannedPacketLabel?.let { "ULTIMO PKT: $it" }

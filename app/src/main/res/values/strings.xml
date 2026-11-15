@@ -4,16 +4,12 @@
     <string name="nav_receive">Ricevi</string>
     <string name="nav_vault">Archivio</string>
     <string name="nav_settings">Aspetto</string>
-    <string name="hero_title">Trasmissione Ottica Offline</string>
-    <string name="hero_subtitle">Offline • Parità XOR • SHA-256</string>
     <string name="pick_file_button">Scegli file</string>
     <string name="capture_photo_button">Scatta foto</string>
     <string name="create_text_note_button">Nuova nota</string>
-    <string name="load_sample_button">Demo</string>
     <string name="camera_permission_title">Accesso fotocamera</string>
-    <string name="camera_permission_rationale">Consenti l\'uso della fotocamera per leggere i codici QR offline. Nessun dato lascia il dispositivo.</string>
+    <string name="camera_permission_rationale">Consenti l\'uso della fotocamera per inquadrare i codici QR. Tutto resta sul tuo dispositivo.</string>
     <string name="grant_camera_button">Attiva fotocamera</string>
-    <string name="simulate_loopback_button">Simula loopback</string>
     <string name="vault_empty_title">Archivio vuoto</string>
-    <string name="vault_empty_subtitle">I file inviati e ricevuti appariranno qui con verifica SHA-256.</string>
+    <string name="vault_empty_subtitle">I file inviati e ricevuti verranno salvati qui.</string>
 </resources>

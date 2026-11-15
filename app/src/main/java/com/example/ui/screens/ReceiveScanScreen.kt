@@ -11,6 +11,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Size
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
@@ -29,17 +30,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -58,18 +55,15 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -107,9 +101,7 @@ import com.example.domain.protocol.QrCodecEngine
 import com.example.ui.components.InstrumentActionButton
 import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
-import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.components.rememberOptiShareHaptics
-import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.ReceiverUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -122,7 +114,6 @@ fun ReceiveScanScreen(
     receiverState: ReceiverUiState,
     onQrScanned: (String) -> Boolean,
     onResetSession: () -> Unit,
-    onStartLoopbackSimulation: () -> Unit,
     onGenerateNackQr: () -> Unit,
     onDismissNackQr: () -> Unit,
     onSubmitDecryptionPassword: (String) -> Unit,
@@ -225,12 +216,11 @@ fun ReceiveScanScreen(
                             if (added) triggerHapticTick(context)
                         },
                         onResetRequest = handleResetRequest,
-                        onStartLoopback = onStartLoopbackSimulation,
                         onPickImage = {
                             runCatching {
                                 qrImagePickerLauncher.launch("image/*")
                             }.onFailure {
-                                onStartLoopbackSimulation()
+                                Toast.makeText(context, "Impossibile aprire la galleria", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -290,12 +280,11 @@ fun ReceiveScanScreen(
                             if (added) triggerHapticTick(context)
                         },
                         onResetRequest = handleResetRequest,
-                        onStartLoopback = onStartLoopbackSimulation,
                         onPickImage = {
                             runCatching {
                                 qrImagePickerLauncher.launch("image/*")
                             }.onFailure {
-                                onStartLoopbackSimulation()
+                                Toast.makeText(context, "Impossibile aprire la galleria", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -328,7 +317,6 @@ fun ReceiveScanScreen(
 
     receiverState.nackQrBitmap?.let { nackBmp ->
         ReverseNackQrModal(
-            sessionId = receiverState.activeSessionId ?: "",
             missingIndices = receiverState.missingDataChunkIndices,
             nackBitmap = nackBmp,
             onDismiss = onDismissNackQr
@@ -338,10 +326,10 @@ fun ReceiveScanScreen(
     if (showResetConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showResetConfirmDialog = false },
-            title = { Text("Interrompere la ricezione in corso?") },
+            title = { Text("Annullare la ricezione?") },
             text = {
                 Text(
-                    "I pacchetti acquisiti per '${receiverState.fileName}' verranno scartati e il buffer ottico verrà azzerato."
+                    "Le parti già ricevute di '${receiverState.fileName}' verranno cancellate."
                 )
             },
             confirmButton = {
@@ -351,12 +339,12 @@ fun ReceiveScanScreen(
                         onResetSession()
                     }
                 ) {
-                    Text("Azzera Buffer")
+                    Text("Annulla ricezione")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirmDialog = false }) {
-                    Text("Continua Scansione")
+                    Text("Continua")
                 }
             }
         )
@@ -388,20 +376,20 @@ private fun AesDecryptionUnlockPanel(
             ) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = colorScheme.secondary)
                 Text(
-                    text = "Decifra Stream AES-256-GCM",
+                    text = "File protetto da password",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
             }
             Text(
-                text = "Tutti i ${receiverState.totalDataChunks} pacchetti di '${receiverState.fileName}' sono stati ricevuti. Inserisci la passphrase AES-256 per decifrare e verificare l'hash SHA-256.",
+                text = "Tutte le parti di '${receiverState.fileName}' sono arrivate. Inserisci la password per aprirlo.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colorScheme.onSurfaceVariant
             )
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Passphrase AES-256") },
+                label = { Text("Password") },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
                 modifier = Modifier
@@ -422,7 +410,7 @@ private fun AesDecryptionUnlockPanel(
                     .fillMaxWidth()
                     .testTag("receiver_decrypt_submit_button")
             ) {
-                Text("Decifra e Verifica SHA-256")
+                Text("Sblocca file")
             }
         }
     }
@@ -430,7 +418,6 @@ private fun AesDecryptionUnlockPanel(
 
 @Composable
 private fun ReverseNackQrModal(
-    sessionId: String,
     missingIndices: List<Int>,
     nackBitmap: Bitmap,
     onDismiss: () -> Unit
@@ -441,7 +428,7 @@ private fun ReverseNackQrModal(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "QR Inverso NACK (${missingIndices.size} Mancanti)",
+                text = "Parti mancanti (${missingIndices.size})",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -453,7 +440,7 @@ private fun ReverseNackQrModal(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Mostra questo codice QR al dispositivo mittente (pulsante 'NACK' su Invia QR) per fargli trasmettere solo i ${missingIndices.size} pacchetti mancanti della sessione #$sessionId.",
+                    text = "Mostra questo QR all'altro telefono (tocca 'Parti mancanti? Inquadra QR' su Invia) per ricevere solo le ${missingIndices.size} parti che mancano.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant
                 )
@@ -470,25 +457,16 @@ private fun ReverseNackQrModal(
                 ) {
                     Image(
                         bitmap = nackBitmap.asImageBitmap(),
-                        contentDescription = "QR NACK Pacchetti Mancanti",
+                        contentDescription = "QR parti mancanti",
                         filterQuality = FilterQuality.None,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-
-                Text(
-                    text = "PACCHETTI RICHIESTI: ${missingIndices.take(12).joinToString(", ") { "D#${it + 1}" }}" +
-                        if (missingIndices.size > 12) "…" else "",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.primary,
-                    textAlign = TextAlign.Center
-                )
             }
         },
         confirmButton = {
             Button(onClick = onDismiss) {
-                Text("Torna allo Scanner")
+                Text("Torna allo scanner")
             }
         }
     )
@@ -501,7 +479,6 @@ private fun CameraScannerInstrumentPanel(
     onRequestPermission: () -> Unit,
     onQrDecoded: (String) -> Unit,
     onResetRequest: () -> Unit,
-    onStartLoopback: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -653,7 +630,7 @@ private fun CameraScannerInstrumentPanel(
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = receiverState.lastScannedPacketLabel ?: "Inquadra il QR",
+                            text = receiverState.lastScannedPacketLabel ?: "Inquadra il codice QR",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                             maxLines = 1,
@@ -664,7 +641,7 @@ private fun CameraScannerInstrumentPanel(
                         )
                         if (receiverState.activeSessionId != null) {
                             Text(
-                                text = "${(receiverState.transferProgress * 100).toInt()}% · ${String.format(Locale.US, "%.1f", receiverState.liveSpeedKbps)} KB/s",
+                                text = "${(receiverState.transferProgress * 100).toInt()}%",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = bracketColor,
                                 maxLines = 1,
@@ -713,7 +690,7 @@ private fun CameraScannerInstrumentPanel(
             Spacer(modifier = Modifier.height(10.dp))
 
             InstrumentActionButton(
-                label = "Importa da galleria",
+                label = "Scegli foto QR dalla galleria",
                 icon = Icons.Default.ImageSearch,
                 onClick = onPickImage,
                 isPrimary = true,
@@ -721,31 +698,10 @@ private fun CameraScannerInstrumentPanel(
                     .fillMaxWidth()
                     .testTag("import_qr_image_button")
             )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                TextButton(
-                    onClick = onStartLoopback,
-                    enabled = !receiverState.isLoopbackRunning,
-                    modifier = Modifier.testTag("simulate_loopback_button")
-                ) {
-                    Icon(Icons.Default.PlayCircleFilled, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = if (receiverState.isLoopbackRunning) "Simulazione in corso…" else "Simula loopback",
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-            }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AssemblyMatrixInstrumentPanel(
     receiverState: ReceiverUiState,
@@ -756,7 +712,6 @@ private fun AssemblyMatrixInstrumentPanel(
         it != ChunkReceptionState.PENDING
     }
     val missing = receiverState.missingDataChunkIndices
-    var showChunkGrid by rememberSaveable { mutableStateOf(false) }
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -780,9 +735,8 @@ private fun AssemblyMatrixInstrumentPanel(
                         .padding(end = 8.dp)
                 )
                 Text(
-                    text = "$acquiredCount/${receiverState.totalDataChunks}",
+                    text = "$acquiredCount di ${receiverState.totalDataChunks}",
                     style = MaterialTheme.typography.labelMedium,
-                    fontFamily = JetBrainsMonoFontFamily,
                     color = colorScheme.primary,
                     maxLines = 1,
                     softWrap = false
@@ -808,71 +762,6 @@ private fun AssemblyMatrixInstrumentPanel(
                 trackColor = colorScheme.surfaceVariant.copy(alpha = 0.6f)
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = String.format(
-                        Locale.US,
-                        "%.1f KB/s · ETA %ds",
-                        receiverState.liveSpeedKbps,
-                        if (receiverState.completedResult != null) 0 else receiverState.estimatedRemainingSeconds
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.onSurfaceVariant
-                )
-                if (receiverState.totalDataChunks > 0) {
-                    TextButton(
-                        onClick = { showChunkGrid = !showChunkGrid },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = if (showChunkGrid) "Nascondi pacchetti" else "Dettaglio pacchetti",
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                }
-            }
-
-            AnimatedVisibility(visible = showChunkGrid && receiverState.totalDataChunks > 0) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    for (i in 0 until receiverState.totalDataChunks) {
-                        val state = receiverState.chunkStates[i] ?: ChunkReceptionState.PENDING
-                        val bgColor = when (state) {
-                            ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary.copy(alpha = 0.16f)
-                            ChunkReceptionState.RECOVERED_PARITY -> colorScheme.secondary.copy(alpha = 0.18f)
-                            ChunkReceptionState.PENDING -> colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                        }
-                        val textColor = when (state) {
-                            ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary
-                            ChunkReceptionState.RECOVERED_PARITY -> colorScheme.secondary
-                            ChunkReceptionState.PENDING -> colorScheme.onSurfaceVariant
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(width = 46.dp, height = 28.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(bgColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "D#${i + 1}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = textColor,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-            }
-
             if (missing.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = onGenerateNackQr,
@@ -883,7 +772,7 @@ private fun AssemblyMatrixInstrumentPanel(
                     Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Richiedi ${missing.size} mancanti (NACK)",
+                        text = "Mostra QR per le ${missing.size} parti mancanti",
                         style = MaterialTheme.typography.labelMedium,
                         maxLines = 1,
                         softWrap = false
@@ -926,32 +815,20 @@ private fun VerifiedResultInstrumentPanel(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "${result.fileName} (${result.rawBytes.size} B)",
+                                text = result.fileName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (result.wasEncrypted) {
-                                    "Decifrato AES-256 · SHA-256 OK"
-                                } else {
-                                    "Integrità SHA-256 verificata"
-                                },
+                                text = "${formatSimpleBytes(result.rawBytes.size.toLong())} · " +
+                                    if (result.wasEncrypted) "Sbloccato e verificato" else "Ricevuto e verificato",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colorScheme.tertiary
                             )
                         }
                     }
-
-                    Text(
-                        text = result.actualSha256,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -959,7 +836,7 @@ private fun VerifiedResultInstrumentPanel(
                     ) {
                         receiverState.savedRecord?.let { record ->
                             InstrumentActionButton(
-                                label = "Ritrasmetti QR",
+                                label = "Invia QR",
                                 icon = Icons.Default.QrCode2,
                                 onClick = { onRetransmitCompletedRecord(record) },
                                 isPrimary = true,
@@ -970,7 +847,7 @@ private fun VerifiedResultInstrumentPanel(
                         }
 
                         InstrumentActionButton(
-                            label = "Archivio",
+                            label = "Apri Archivio",
                             icon = Icons.Default.FolderSpecial,
                             onClick = onOpenVault,
                             modifier = Modifier
@@ -982,6 +859,14 @@ private fun VerifiedResultInstrumentPanel(
             }
         }
     }
+}
+
+private fun formatSimpleBytes(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
+    val mb = kb / 1024.0
+    return String.format(Locale.US, "%.2f MB", mb)
 }
 
 private fun onQrStringScannedSafe(

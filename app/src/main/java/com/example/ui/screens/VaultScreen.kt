@@ -1,12 +1,9 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,15 +24,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -70,11 +67,8 @@ import androidx.core.content.FileProvider
 import com.example.R
 import com.example.data.local.TransferRecordEntity
 import com.example.ui.components.OptiShareCard
-import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.SegmentedSelectorBar
-import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.components.rememberOptiShareHaptics
-import com.example.ui.theme.JetBrainsMonoFontFamily
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -99,7 +93,6 @@ fun VaultScreen(
     var recordBeingRenamed by remember { mutableStateOf<TransferRecordEntity?>(null) }
     var renameText by rememberSaveable { mutableStateOf("") }
     var recordPendingDelete by remember { mutableStateOf<TransferRecordEntity?>(null) }
-    var copiedDigestId by remember { mutableStateOf<Long?>(null) }
 
     val filteredRecords = remember(records, selectedFilter, searchQuery) {
         val byDirection = when (selectedFilter) {
@@ -112,9 +105,7 @@ fun VaultScreen(
             byDirection
         } else {
             byDirection.filter {
-                it.fileName.contains(query, ignoreCase = true) ||
-                    it.sha256Hash.contains(query, ignoreCase = true) ||
-                    it.mimeType.contains(query, ignoreCase = true)
+                it.fileName.contains(query, ignoreCase = true)
             }
         }
     }
@@ -153,7 +144,7 @@ fun VaultScreen(
                     onValueChange = { searchQuery = it },
                     placeholder = {
                         Text(
-                            "Cerca file o SHA-256…",
+                            "Cerca per nome file…",
                             style = MaterialTheme.typography.bodySmall
                         )
                     },
@@ -197,7 +188,7 @@ fun VaultScreen(
 
                 if (records.isNotEmpty()) {
                     Text(
-                        text = "${records.size} file · ${formatByteCount(totalBytes)}",
+                        text = "${records.size} file salvati · ${formatByteCount(totalBytes)}",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 4.dp)
@@ -226,7 +217,7 @@ fun VaultScreen(
                         )
                         Text(
                             text = if (searchQuery.isNotBlank()) {
-                                "Nessun risultato per \"$searchQuery\""
+                                "Nessun file trovato per \"$searchQuery\""
                             } else {
                                 stringResource(R.string.vault_empty_title)
                             },
@@ -235,7 +226,7 @@ fun VaultScreen(
                         )
                         Text(
                             text = if (searchQuery.isNotBlank()) {
-                                "Prova a cancellare il filtro di ricerca o a cambiare categoria."
+                                "Prova a cercare un altro nome o cambia filtro."
                             } else {
                                 stringResource(R.string.vault_empty_subtitle)
                             },
@@ -246,7 +237,6 @@ fun VaultScreen(
                     }
                 }
             } else if (isWideLayout) {
-                // Master-Detail Workstation Layout
                 val activeRecord = filteredRecords.find { it.id == selectedRecordId } ?: filteredRecords.first()
 
                 Row(
@@ -278,12 +268,6 @@ fun VaultScreen(
                     ) {
                         VaultRecordInspectorCard(
                             record = activeRecord,
-                            isDigestCopied = copiedDigestId == activeRecord.id,
-                            onCopyDigest = {
-                                haptics.confirmSuccess()
-                                copyHashToClipboard(context, activeRecord.sha256Hash)
-                                copiedDigestId = activeRecord.id
-                            },
                             onRetransmit = { onRetransmitViaQr(activeRecord) },
                             onShareExternal = { shareRecordFileExternally(context, activeRecord) },
                             onOpenRename = {
@@ -295,7 +279,6 @@ fun VaultScreen(
                     }
                 }
             } else {
-                // Handheld Vertical Ledger with Expandable Inspector
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(bottom = 104.dp),
@@ -308,15 +291,9 @@ fun VaultScreen(
                         VaultExpandableRecordCard(
                             record = record,
                             isExpanded = selectedRecordId == record.id,
-                            isDigestCopied = copiedDigestId == record.id,
                             onToggleExpand = {
                                 haptics.selectionTick()
                                 selectedRecordId = if (selectedRecordId == record.id) null else record.id
-                            },
-                            onCopyDigest = {
-                                haptics.confirmSuccess()
-                                copyHashToClipboard(context, record.sha256Hash)
-                                copiedDigestId = record.id
                             },
                             onRetransmit = { onRetransmitViaQr(record) },
                             onShareExternal = { shareRecordFileExternally(context, record) },
@@ -336,7 +313,7 @@ fun VaultScreen(
     recordBeingRenamed?.let { target ->
         AlertDialog(
             onDismissRequest = { recordBeingRenamed = null },
-            title = { Text("Rinomina File in Archivio") },
+            title = { Text("Rinomina file") },
             text = {
                 OutlinedTextField(
                     value = renameText,
@@ -370,10 +347,10 @@ fun VaultScreen(
     recordPendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { recordPendingDelete = null },
-            title = { Text("Conferma Eliminazione") },
+            title = { Text("Eliminare questo file?") },
             text = {
                 Text(
-                    "Vuoi rimuovere definitivamente \"${target.fileName}\" dall'archivio locale del dispositivo?"
+                    "\"${target.fileName}\" verrà rimosso dall'archivio di questo telefono."
                 )
             },
             confirmButton = {
@@ -400,6 +377,26 @@ fun VaultScreen(
 }
 
 @Composable
+private fun DirectionIconBadge(isReceived: Boolean) {
+    val colorScheme = MaterialTheme.colorScheme
+    val badgeColor = if (isReceived) colorScheme.tertiary else colorScheme.primary
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = badgeColor.copy(alpha = 0.14f),
+        modifier = Modifier.size(32.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (isReceived) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                contentDescription = if (isReceived) "Ricevuto" else "Inviato",
+                tint = badgeColor,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
 private fun VaultCompactRowItem(
     record: TransferRecordEntity,
     isSelected: Boolean,
@@ -421,50 +418,25 @@ private fun VaultCompactRowItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = badgeColor.copy(alpha = 0.14f)
-                ) {
-                    Text(
-                        text = if (isReceived) "RX" else "TX",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = badgeColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+            DirectionIconBadge(isReceived = isReceived)
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = record.fileName,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${formatByteCount(record.fileSizeBytes.toLong())} • ${record.totalDataChunks} PKT • ${dateFormat.format(Date(record.timestamp))}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = colorScheme.onSurfaceVariant
-                    )
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = record.fileName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${if (isReceived) "Ricevuto" else "Inviato"} · ${formatByteCount(record.fileSizeBytes.toLong())} · ${dateFormat.format(Date(record.timestamp))}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorScheme.onSurfaceVariant
+                )
             }
-
-            Icon(
-                Icons.Default.Verified,
-                contentDescription = "Integrità verificata",
-                tint = colorScheme.tertiary,
-                modifier = Modifier.size(16.dp)
-            )
         }
     }
 }
@@ -473,9 +445,7 @@ private fun VaultCompactRowItem(
 private fun VaultExpandableRecordCard(
     record: TransferRecordEntity,
     isExpanded: Boolean,
-    isDigestCopied: Boolean,
     onToggleExpand: () -> Unit,
-    onCopyDigest: () -> Unit,
     onRetransmit: () -> Unit,
     onShareExternal: () -> Unit,
     onOpenRename: () -> Unit,
@@ -499,79 +469,29 @@ private fun VaultExpandableRecordCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = badgeColor.copy(alpha = 0.14f)
-                    ) {
-                        Text(
-                            text = if (isReceived) "RX" else "TX",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            color = badgeColor,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                        )
-                    }
+                DirectionIconBadge(isReceived = isReceived)
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = record.fileName,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${formatByteCount(record.fileSizeBytes.toLong())} · ${dateFormat.format(Date(record.timestamp))}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = record.fileName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${if (isReceived) "Ricevuto" else "Inviato"} · ${formatByteCount(record.fileSizeBytes.toLong())} · ${dateFormat.format(Date(record.timestamp))}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
                 }
-
-                Icon(
-                    Icons.Default.Verified,
-                    contentDescription = "Integrità verificata",
-                    tint = colorScheme.tertiary,
-                    modifier = Modifier.size(16.dp)
-                )
             }
 
             AnimatedVisibility(visible = isExpanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                            .clickable(onClick = onCopyDigest)
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "SHA-256: ${record.sha256Hash.take(22)}…",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            color = colorScheme.tertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = if (isDigestCopied) "Copiato" else "Copia",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.primary
-                        )
-                    }
-
                     record.textPreview?.takeIf { it.isNotBlank() }?.let { snippet ->
                         Box(
                             modifier = Modifier
@@ -583,8 +503,7 @@ private fun VaultExpandableRecordCard(
                             Text(
                                 text = snippet.take(200),
                                 style = MaterialTheme.typography.bodySmall,
-                                fontFamily = JetBrainsMonoFontFamily,
-                                maxLines = 3,
+                                maxLines = 4,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
@@ -596,20 +515,6 @@ private fun VaultExpandableRecordCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = onRetransmit,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Invia QR",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-
-                        FilledTonalButton(
                             onClick = onShareExternal,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -617,6 +522,20 @@ private fun VaultExpandableRecordCard(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Condividi",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+
+                        FilledTonalButton(
+                            onClick = onRetransmit,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Invia QR",
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
                                 softWrap = false
@@ -648,15 +567,13 @@ private fun VaultExpandableRecordCard(
 @Composable
 private fun VaultRecordInspectorCard(
     record: TransferRecordEntity,
-    isDigestCopied: Boolean,
-    onCopyDigest: () -> Unit,
     onRetransmit: () -> Unit,
     onShareExternal: () -> Unit,
     onOpenRename: () -> Unit,
     onRequestDelete: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm:ss", Locale.getDefault()) }
+    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()) }
     val isReceived = record.direction == "RECEIVED"
 
     OptiShareCard(
@@ -670,107 +587,48 @@ private fun VaultRecordInspectorCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionHeaderRow(
-                overline = if (isReceived) "RICEVUTO VIA FOTOCAMERA" else "INVIATO VIA STREAM QR",
-                title = "Ispettore File Archiviato"
-            )
-
-            Text(
-                text = record.fileName,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                TelemetryMetricCell(
-                    label = "DIMENSIONE",
-                    value = formatByteCount(record.fileSizeBytes.toLong()),
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "PACCHETTI QR",
-                    value = "${record.totalDataChunks} PKT",
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TelemetryMetricCell(
-                    label = "MIME TYPE",
-                    value = record.mimeType,
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "DATA REGISTRAZIONE",
-                    value = dateFormat.format(Date(record.timestamp)),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                    .clickable(onClick = onCopyDigest)
-                    .padding(10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                DirectionIconBadge(isReceived = isReceived)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isDigestCopied) "DIGEST SHA-256 COPIATO" else "DIGEST INTEGRITÀ SHA-256",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.tertiary
+                        text = if (isReceived) "File ricevuto" else "File inviato",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = record.sha256Hash,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = colorScheme.onSurface,
+                        text = record.fileName,
+                        style = MaterialTheme.typography.titleLarge,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Icon(
-                    Icons.Default.ContentCopy,
-                    contentDescription = "Copia SHA-256",
-                    tint = colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
             }
 
+            Text(
+                text = "${formatByteCount(record.fileSizeBytes.toLong())} · ${dateFormat.format(Date(record.timestamp))}",
+                style = MaterialTheme.typography.bodySmall,
+                color = colorScheme.onSurfaceVariant
+            )
+
+            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
+
             record.textPreview?.takeIf { it.isNotBlank() }?.let { snippet ->
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                        .padding(10.dp)
+                ) {
                     Text(
-                        text = "ANTEPRIMA CONTENUTO",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.onSurfaceVariant
+                        text = snippet.take(300),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                            .padding(10.dp)
-                    ) {
-                        Text(
-                            text = snippet.take(300),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            maxLines = 5,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
             }
 
@@ -781,21 +639,21 @@ private fun VaultRecordInspectorCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = onRetransmit,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Trasmetti QR")
-                }
-
-                FilledTonalButton(
                     onClick = onShareExternal,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Condividi")
+                }
+
+                FilledTonalButton(
+                    onClick = onRetransmit,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Invia QR")
                 }
             }
 
@@ -836,13 +694,6 @@ private fun formatByteCount(bytes: Long): String {
     if (kb < 1024.0) return String.format(Locale.US, "%.1f KB", kb)
     val mb = kb / 1024.0
     return String.format(Locale.US, "%.2f MB", mb)
-}
-
-private fun copyHashToClipboard(context: Context, hash: String) {
-    runCatching {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        clipboard?.setPrimaryClip(ClipData.newPlainText("SHA-256 Digest", hash))
-    }
 }
 
 private fun shareRecordFileExternally(context: Context, record: TransferRecordEntity) {

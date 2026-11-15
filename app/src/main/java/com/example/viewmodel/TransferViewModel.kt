@@ -19,8 +19,6 @@ import com.example.domain.protocol.QrCodecEngine
 import com.example.domain.protocol.QrEccLevel
 import com.example.domain.protocol.ReconstructedFileResult
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -102,8 +100,7 @@ data class ReceiverUiState(
     val nackQrBitmap: Bitmap? = null,
     val completedResult: ReconstructedFileResult? = null,
     val savedRecord: TransferRecordEntity? = null,
-    val isLoopbackRunning: Boolean = false,
-    val statusBanner: String = "Inquadra il flusso QR dinamico per iniziare la ricezione automatica"
+    val statusBanner: String = "Inquadra il codice QR dall'altro dispositivo"
 ) {
     val missingDataChunkIndices: List<Int>
         get() = if (totalDataChunks == 0) emptyList()
@@ -132,37 +129,6 @@ class TransferViewModel(
     private val parityRecoveredSet = mutableSetOf<Int>()
     private var lastReceivedPacketMeta: OpticalPacket? = null
     private var receptionStartTimeMs: Long = 0L
-    private var loopbackJob: Job? = null
-
-    init {
-        loadSampleSpecDocument()
-    }
-
-    fun loadSampleSpecDocument() {
-        val sampleText = """
-            ==========================================================
-            OPTISHARE QR v1.0.3 — PROTOCOLLO OTTICO FOSS (F-DROID READY)
-            ==========================================================
-            Modalità: Trasmissione Multi-Frame QR (100% Air-Gapped Offline)
-            Licenza & Dipendenze: Stack 100% Open Source (MIT / Apache 2.0)
-            Permessi di Rete: NESSUNO (Zero Anti-Feature)
-            
-            1. ARCHITETTURA DI TRASFERIMENTO OTTICO v1.0.3
-            - Compressione binaria GZIP + Archivio Multi-File ZIP integrato.
-            - Crittografia autenticata end-to-end opzionale AES-256-GCM (PBKDF2-SHA256).
-            - Correzione Errori Forward (FEC) tramite blocchi di Parità XOR.
-            - Canale di ritorno ottico NACK QR per ritrasmettere solo i pacchetti mancanti.
-            - Generazione QR multi-core parallela e sincronizzazione display 120Hz VSync.
-            - Verifica finale con impronta crittografica SHA-256 sull'intero file ricostruito.
-        """.trimIndent()
-
-        prepareStreamFromBytes(
-            fileName = "Specifica_OptiShare_v1.0.3.txt",
-            mimeType = "text/plain",
-            rawBytes = sampleText.toByteArray(Charsets.UTF_8),
-            saveToVaultAsSent = false
-        )
-    }
 
     fun prepareStreamFromUri(context: Context, uri: Uri) {
         viewModelScope.launch {
@@ -394,7 +360,6 @@ class TransferViewModel(
                     )
                 }
 
-                val encBadge = if (prepared.isEncrypted) " · AES-256-GCM" else ""
                 _senderState.update {
                     it.copy(
                         isPreparing = false,
@@ -404,7 +369,7 @@ class TransferViewModel(
                         isPlaying = true,
                         encodingDurationMs = durationMs,
                         selectedMissingDataIndices = emptySet(),
-                        statusMessage = "Stream pronto in ${durationMs}ms: ${prepared.dataPackets.size} PKT + ${prepared.parityPackets.size} XOR$encBadge"
+                        statusMessage = "Pronto per l'invio (${prepared.allOrderedPackets.size} codici QR)"
                     )
                 }
             } catch (e: Exception) {
@@ -429,14 +394,14 @@ class TransferViewModel(
         return OpticalPacketProtocol.decodeNackQrString(rawQrString).mapCatching { nack ->
             val validIndices = nack.missingDataIndices.filter { it in 0 until stream.dataPackets.size }.toSet()
             require(validIndices.isNotEmpty()) {
-                "Nessun indice valido per lo stream corrente (${stream.dataPackets.size} PKT)"
+                "Questo codice QR non appartiene al file corrente"
             }
             _senderState.update {
                 it.copy(
                     selectedMissingDataIndices = validIndices,
                     currentFramePosition = 0,
                     isPlaying = true,
-                    statusMessage = "NACK applicato: trasmissione mirata di ${validIndices.size} pacchetti mancanti"
+                    statusMessage = "Invio delle ${validIndices.size} parti mancanti"
                 )
             }
             validIndices.size
@@ -544,7 +509,6 @@ class TransferViewModel(
     }
 
     fun resetReceiverSession() {
-        loopbackJob?.cancel()
         receivedDataPayloads.clear()
         receivedParityPackets.clear()
         parityRecoveredSet.clear()
@@ -560,7 +524,7 @@ class TransferViewModel(
             _receiverState.update {
                 it.copy(
                     crcErrorsRejected = it.crcErrorsRejected + 1,
-                    statusBanner = "Pacchetto corrotto scartato (CRC32 non valido)"
+                    statusBanner = "Immagine non chiara, continua a inquadrare…"
                 )
             }
             return false
@@ -590,7 +554,7 @@ class TransferViewModel(
                 chunkSize = packet.chunkSize,
                 isEncryptedStream = packet.isEncrypted,
                 chunkStates = initialMap,
-                statusBanner = "Agganciato stream '${packet.fileName}' (${packet.totalDataChunks} PKT${if (packet.isEncrypted) " · AES-256" else ""})"
+                statusBanner = "Ricezione di '${packet.fileName}' (${packet.totalDataChunks} parti)"
             )
         }
         lastReceivedPacketMeta = packet
@@ -657,39 +621,33 @@ class TransferViewModel(
                 receivedParityBlocks = updatedParityBlocks,
                 validFramesScanned = it.validFramesScanned + 1,
                 parityRecoveredCount = parityRecoveredSet.size,
-                lastScannedPacketLabel = "${packet.displayNumber} (CRC ${packet.crc32Hex.take(6)})",
+                lastScannedPacketLabel = if (packet.kind == PacketKind.PARITY) {
+                    "Recupero ${packet.displayNumber}"
+                } else {
+                    "Parte $receivedCount di ${packet.totalDataChunks}"
+                },
                 transferProgress = progress,
                 elapsedMs = elapsedMs,
                 liveSpeedKbps = speedKbps,
                 estimatedRemainingSeconds = etaSeconds,
                 statusBanner = if (receivedCount < packet.totalDataChunks) {
-                    "Ricevuti $receivedCount/${packet.totalDataChunks} PKT (${String.format("%.1f", speedKbps)} KB/s · ETA ${etaSeconds}s)"
+                    "Ricevute $receivedCount di ${packet.totalDataChunks} parti" +
+                        if (etaSeconds > 0) " · circa ${etaSeconds}s" else ""
                 } else if (packet.isEncrypted) {
-                    "Tutti i pacchetti acquisiti! Inserisci la password AES-256 per decifrare."
+                    "File ricevuto! Inserisci la password per aprirlo."
                 } else {
-                    "Tutti i pacchetti acquisiti! Verifica SHA-256 in corso..."
+                    "File ricevuto! Controllo finale in corso…"
                 }
             )
         }
 
         if (receivedCount == packet.totalDataChunks) {
             if (packet.isEncrypted) {
-                // If loopback test is running and sender has the password, auto-supply it; otherwise prompt user
-                val autoPass = if (_receiverState.value.isLoopbackRunning) {
-                    _senderState.value.encryptionPassword.takeIf { it.isNotBlank() }
-                } else {
-                    null
-                }
-                if (autoPass != null) {
-                    finalizeFileReconstruction(packet, autoPass)
-                } else {
-                    _receiverState.update {
-                        it.copy(
-                            awaitingDecryptionPassword = true,
-                            decryptionError = null,
-                            isLoopbackRunning = false
-                        )
-                    }
+                _receiverState.update {
+                    it.copy(
+                        awaitingDecryptionPassword = true,
+                        decryptionError = null
+                    )
                 }
             } else {
                 finalizeFileReconstruction(packet, null)
@@ -741,62 +699,22 @@ class TransferViewModel(
                         awaitingDecryptionPassword = false,
                         decryptionError = null,
                         nackQrBitmap = null,
-                        isLoopbackRunning = false,
                         statusBanner = if (reconstructed.integrityVerified) {
-                            "Trasferimento completato! Integrità SHA-256 verificata al 100%."
+                            "File ricevuto e pronto!"
                         } else {
-                            "Attenzione: Hash SHA-256 non corrispondente."
+                            "Il file ricevuto potrebbe essere danneggiato. Riprova."
                         }
                     )
                 }
             }.onFailure { err ->
                 _receiverState.update {
                     it.copy(
-                        isLoopbackRunning = false,
                         awaitingDecryptionPassword = lastPacket.isEncrypted,
-                        decryptionError = err.localizedMessage ?: "Password non valida",
-                        statusBanner = "Errore ricostruzione: ${err.localizedMessage}"
+                        decryptionError = if (lastPacket.isEncrypted) "Password non corretta" else err.localizedMessage,
+                        statusBanner = "Controlla la password e riprova."
                     )
                 }
             }
-        }
-    }
-
-    fun startOpticalLoopbackSimulation(simulateFrameDrops: Boolean = true) {
-        val senderBitmaps = _senderState.value.qrBitmaps
-        val stream = _senderState.value.stream
-        if (senderBitmaps.isEmpty() || stream == null) return
-
-        resetReceiverSession()
-        _receiverState.update {
-            it.copy(
-                isLoopbackRunning = true,
-                statusBanner = "Simulazione ottica attiva: decodifica bitmap QR con ZXing..."
-            )
-        }
-
-        loopbackJob = viewModelScope.launch {
-            for ((idx, bitmap) in senderBitmaps.withIndex()) {
-                if (_receiverState.value.completedResult != null || _receiverState.value.awaitingDecryptionPassword) break
-                val pkt = stream.allOrderedPackets.getOrNull(idx)
-
-                if (simulateFrameDrops && pkt != null && pkt.kind == PacketKind.DATA && pkt.index == 1 && pkt.totalDataChunks >= 3) {
-                    delay(120L)
-                    _receiverState.update {
-                        it.copy(statusBanner = "Simulato riflesso ottico su D#2: attesa pacchetto Parità XOR...")
-                    }
-                    continue
-                }
-
-                val decodedString = withContext(Dispatchers.Default) {
-                    QrCodecEngine.decodeFromBitmap(bitmap)
-                }
-                if (decodedString != null) {
-                    onQrStringScanned(decodedString)
-                }
-                delay(120L)
-            }
-            _receiverState.update { it.copy(isLoopbackRunning = false) }
         }
     }
 

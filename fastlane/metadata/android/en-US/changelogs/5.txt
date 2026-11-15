@@ -1,0 +1,4 @@
+Version 1.05:
+- Persistent APK signing: future updates can be installed directly over this version without uninstalling
+- Beginner-friendly interface: plain, everyday wording instead of technical jargon and low-level parameters
+- Removed all demo content, sample presets, and simulation modes for a clean, ready-to-use experience

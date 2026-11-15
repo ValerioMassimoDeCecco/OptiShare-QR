@@ -2,14 +2,8 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
-import android.graphics.Color as AndroidColor
-import android.graphics.Paint
 import android.net.Uri
 import android.util.Size
 import android.view.WindowManager
@@ -27,7 +21,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,8 +30,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,8 +49,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -74,7 +63,6 @@ import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,7 +74,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -95,7 +82,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -105,7 +91,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
@@ -113,6 +98,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -120,7 +106,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.domain.protocol.OpticalPacketProtocol
 import com.example.domain.protocol.PacketKind
-import com.example.domain.protocol.PreparedOpticalStream
 import com.example.domain.protocol.QrCodecEngine
 import com.example.domain.protocol.QrEccLevel
 import com.example.domain.protocol.StandardQrKind
@@ -128,15 +113,10 @@ import com.example.ui.components.InstrumentActionButton
 import com.example.ui.components.LiquidGlassPill
 import com.example.ui.components.OptiShareCard
 import com.example.ui.components.SegmentedSelectorBar
-import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.components.rememberOptiShareHaptics
-import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.viewmodel.SenderUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.Executors
 
 @Composable
@@ -146,7 +126,6 @@ fun SendQrScreen(
     onPickMultipleFileUris: (List<Uri>) -> Unit,
     onCapturePhotoBitmap: (Bitmap) -> Unit,
     onCreateTextNote: (String, String) -> Unit,
-    onLoadSampleFile: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onStepFrame: (Int) -> Unit,
     onAdvanceAutoFrame: () -> Unit,
@@ -155,9 +134,6 @@ fun SendQrScreen(
     onUpdateEncryptionPassword: (String) -> Unit,
     onToggleAutoMaxBrightness: () -> Unit,
     onScanNackQr: (String) -> Result<Int>,
-    onToggleMissingChunkFilter: (Int) -> Unit,
-    onClearMissingChunkFilter: () -> Unit,
-    onNavigateToReceiveLoopback: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -168,10 +144,8 @@ fun SendQrScreen(
     var showEncryptionDialog by rememberSaveable { mutableStateOf(false) }
     var showNackScannerDialog by rememberSaveable { mutableStateOf(false) }
 
-    var noteTitle by rememberSaveable { mutableStateOf("Credenziali_Nodo_Offline.txt") }
-    var noteBody by rememberSaveable {
-        mutableStateOf("NODE_ID=OPTI-9942-XKV\nIPV4_LOCAL=192.168.10.45\nVERIFY=SHA256_REQUIRED")
-    }
+    var noteTitle by rememberSaveable { mutableStateOf("") }
+    var noteBody by rememberSaveable { mutableStateOf("") }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -280,7 +254,7 @@ fun SendQrScreen(
         }.onFailure {
             Toast.makeText(
                 context,
-                "Selettore file non disponibile: usa Nota o Demo",
+                "Selettore file non disponibile: usa Nota o Foto",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -343,11 +317,11 @@ fun SendQrScreen(
                 ) {
                     OpticalStagePanel(
                         senderState = senderState,
+                        onPickFile = { handleLaunchFilePicker() },
                         onTogglePlayPause = onTogglePlayPause,
                         onStepFrame = onStepFrame,
                         onOpenEncryptionDialog = { showEncryptionDialog = true },
-                        onOpenNackScanner = { handleOpenNackScanner() },
-                        onNavigateToReceiveLoopback = onNavigateToReceiveLoopback
+                        onOpenNackScanner = { handleOpenNackScanner() }
                     )
                 }
 
@@ -364,20 +338,16 @@ fun SendQrScreen(
                         onCapturePhoto = { handleOpenPhotoCapture() },
                         onOpenNoteModal = { showTextNoteDialog = true },
                         onOpenStandardQrModal = { showStandardQrDialog = true },
-                        onLoadDemo = onLoadSampleFile,
                         onOpenEncryptionDialog = { showEncryptionDialog = true }
                     )
 
-                    senderState.stream?.let { stream ->
-                        InspectorTabbedPanel(
+                    senderState.stream?.let {
+                        SenderSimpleOptionsPanel(
                             senderState = senderState,
-                            stream = stream,
                             onFpsChange = onFpsChange,
                             onUpdateConfig = onUpdateConfig,
                             onToggleAutoMaxBrightness = onToggleAutoMaxBrightness,
-                            onOpenNackScanner = { handleOpenNackScanner() },
-                            onToggleMissingChunkFilter = onToggleMissingChunkFilter,
-                            onClearMissingChunkFilter = onClearMissingChunkFilter
+                            onOpenNackScanner = { handleOpenNackScanner() }
                         )
                     }
                 }
@@ -403,7 +373,6 @@ fun SendQrScreen(
                         onCapturePhoto = { handleOpenPhotoCapture() },
                         onOpenNoteModal = { showTextNoteDialog = true },
                         onOpenStandardQrModal = { showStandardQrDialog = true },
-                        onLoadDemo = onLoadSampleFile,
                         onOpenEncryptionDialog = { showEncryptionDialog = true }
                     )
 
@@ -428,23 +397,20 @@ fun SendQrScreen(
 
                     OpticalStagePanel(
                         senderState = senderState,
+                        onPickFile = { handleLaunchFilePicker() },
                         onTogglePlayPause = onTogglePlayPause,
                         onStepFrame = onStepFrame,
                         onOpenEncryptionDialog = { showEncryptionDialog = true },
-                        onOpenNackScanner = { handleOpenNackScanner() },
-                        onNavigateToReceiveLoopback = onNavigateToReceiveLoopback
+                        onOpenNackScanner = { handleOpenNackScanner() }
                     )
 
-                    senderState.stream?.let { stream ->
-                        InspectorTabbedPanel(
+                    senderState.stream?.let {
+                        SenderSimpleOptionsPanel(
                             senderState = senderState,
-                            stream = stream,
                             onFpsChange = onFpsChange,
                             onUpdateConfig = onUpdateConfig,
                             onToggleAutoMaxBrightness = onToggleAutoMaxBrightness,
-                            onOpenNackScanner = { handleOpenNackScanner() },
-                            onToggleMissingChunkFilter = onToggleMissingChunkFilter,
-                            onClearMissingChunkFilter = onClearMissingChunkFilter
+                            onOpenNackScanner = { handleOpenNackScanner() }
                         )
                     }
 
@@ -468,9 +434,7 @@ fun SendQrScreen(
                 runCatching {
                     imageGalleryLauncher.launch("image/*")
                 }.onFailure {
-                    val fallback = generateSimulatedCameraBitmap()
-                    showPhotoCaptureDialog = false
-                    onCapturePhotoBitmap(fallback)
+                    Toast.makeText(context, "Impossibile aprire la galleria", Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { showPhotoCaptureDialog = false }
@@ -482,7 +446,7 @@ fun SendQrScreen(
             onDismissRequest = { showTextNoteDialog = false },
             title = {
                 Text(
-                    text = "Nuovo Payload Testuale",
+                    text = "Nuova nota",
                     style = MaterialTheme.typography.titleLarge
                 )
             },
@@ -491,14 +455,16 @@ fun SendQrScreen(
                     OutlinedTextField(
                         value = noteTitle,
                         onValueChange = { noteTitle = it },
-                        label = { Text("Identificativo file") },
+                        label = { Text("Titolo") },
+                        placeholder = { Text("Es. Appunti") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = noteBody,
                         onValueChange = { noteBody = it },
-                        label = { Text("Contenuto grezzo (UTF-8)") },
+                        label = { Text("Testo") },
+                        placeholder = { Text("Scrivi qui cosa vuoi inviare…") },
                         minLines = 4,
                         maxLines = 8,
                         modifier = Modifier.fillMaxWidth()
@@ -510,9 +476,10 @@ fun SendQrScreen(
                     onClick = {
                         onCreateTextNote(noteTitle, noteBody)
                         showTextNoteDialog = false
-                    }
+                    },
+                    enabled = noteBody.isNotBlank()
                 ) {
-                    Text("Codifica Stream QR")
+                    Text("Crea QR")
                 }
             },
             dismissButton = {
@@ -549,8 +516,6 @@ fun SendQrScreen(
     if (showNackScannerDialog) {
         NackScannerDialog(
             hasCameraPermission = hasCameraPermission,
-            activeSessionId = senderState.stream?.sessionId ?: "SESSION",
-            totalChunks = senderState.stream?.dataPackets?.size ?: 4,
             onRequestCameraPermission = {
                 runCatching { nackCameraPermissionLauncher.launch(Manifest.permission.CAMERA) }
             },
@@ -560,7 +525,7 @@ fun SendQrScreen(
                     haptics.confirmSuccess()
                     Toast.makeText(
                         context,
-                        "NACK acquisito: filtrati $count pacchetti mancanti",
+                        "Invio solo le $count parti mancanti",
                         Toast.LENGTH_SHORT
                     ).show()
                     showNackScannerDialog = false
@@ -568,7 +533,7 @@ fun SendQrScreen(
                     haptics.notifyError()
                     Toast.makeText(
                         context,
-                        err.localizedMessage ?: "QR NACK non valido",
+                        err.localizedMessage ?: "Codice QR non valido",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -595,20 +560,20 @@ private fun AesEncryptionPasswordDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = colorScheme.primary)
-                Text("Crittografia AES-256-GCM", style = MaterialTheme.typography.titleLarge)
+                Text("Proteggi con password", style = MaterialTheme.typography.titleLarge)
             }
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "Proteggi il flusso QR con cifratura autenticata AES-256-GCM e chiave derivata PBKDF2-HMAC-SHA256 (65.536 iterazioni). Lascia vuoto per trasmettere in chiaro.",
+                    text = "Chi riceve il file dovrà inserire questa password per aprirlo. Lascia vuoto per inviare senza password.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = passwordInput,
                     onValueChange = { passwordInput = it },
-                    label = { Text("Passphrase segreta AES-256") },
+                    label = { Text("Password") },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     modifier = Modifier
@@ -622,13 +587,13 @@ private fun AesEncryptionPasswordDialog(
                 onClick = { onApplyPassword(passwordInput) },
                 modifier = Modifier.testTag("apply_aes_password_button")
             ) {
-                Text(if (passwordInput.isBlank()) "Disattiva Cifratura" else "Attiva AES-256")
+                Text(if (passwordInput.isBlank()) "Rimuovi protezione" else "Imposta password")
             }
         },
         dismissButton = {
             if (currentPassword.isNotBlank()) {
                 TextButton(onClick = { onApplyPassword("") }) {
-                    Text("Rimuovi Password")
+                    Text("Rimuovi")
                 }
             } else {
                 TextButton(onClick = onDismiss) {
@@ -648,18 +613,24 @@ private fun UniversalStandardQrDialog(
     var selectedKind by rememberSaveable { mutableStateOf(StandardQrKind.WIFI) }
 
     // Wi-Fi state
-    var wifiSsid by rememberSaveable { mutableStateOf("OptiShare_Lab_5G") }
-    var wifiPassword by rememberSaveable { mutableStateOf("AirGapped2026!") }
+    var wifiSsid by rememberSaveable { mutableStateOf("") }
+    var wifiPassword by rememberSaveable { mutableStateOf("") }
     var wifiSecurity by rememberSaveable { mutableStateOf("WPA") }
 
     // vCard state
-    var vcardName by rememberSaveable { mutableStateOf("Valerio Massimo") }
-    var vcardPhone by rememberSaveable { mutableStateOf("+39 340 0000000") }
-    var vcardEmail by rememberSaveable { mutableStateOf("info@optishare.org") }
-    var vcardOrg by rememberSaveable { mutableStateOf("OptiShare FOSS Lab") }
+    var vcardName by rememberSaveable { mutableStateOf("") }
+    var vcardPhone by rememberSaveable { mutableStateOf("") }
+    var vcardEmail by rememberSaveable { mutableStateOf("") }
+    var vcardOrg by rememberSaveable { mutableStateOf("") }
 
     // Free text / URL state
-    var freeText by rememberSaveable { mutableStateOf("https://f-droid.org") }
+    var freeText by rememberSaveable { mutableStateOf("") }
+
+    val hasContent = when (selectedKind) {
+        StandardQrKind.WIFI -> wifiSsid.isNotBlank()
+        StandardQrKind.VCARD -> vcardName.isNotBlank() || vcardPhone.isNotBlank()
+        StandardQrKind.TEXT -> freeText.isNotBlank()
+    }
 
     val formattedPayload = remember(
         selectedKind,
@@ -674,31 +645,35 @@ private fun UniversalStandardQrDialog(
     ) {
         when (selectedKind) {
             StandardQrKind.WIFI -> OpticalPacketProtocol.buildWifiStandardQr(
-                ssid = wifiSsid,
+                ssid = wifiSsid.ifBlank { "Rete_WiFi" },
                 password = wifiPassword,
                 security = wifiSecurity
             )
             StandardQrKind.VCARD -> OpticalPacketProtocol.buildVCardStandardQr(
-                fullName = vcardName,
+                fullName = vcardName.ifBlank { "Contatto" },
                 phone = vcardPhone,
                 email = vcardEmail,
                 organization = vcardOrg
             )
-            StandardQrKind.TEXT -> freeText.ifBlank { "OptiShare QR" }
+            StandardQrKind.TEXT -> freeText.ifBlank { " " }
         }
     }
 
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    LaunchedEffect(formattedPayload) {
-        qrBitmap = withContext(Dispatchers.Default) {
-            runCatching {
-                QrCodecEngine.generateQrBitmap(
-                    content = formattedPayload,
-                    sizePx = 600,
-                    eccLevel = QrEccLevel.M
-                )
-            }.getOrNull()
+    LaunchedEffect(formattedPayload, hasContent) {
+        qrBitmap = if (!hasContent) {
+            null
+        } else {
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    QrCodecEngine.generateQrBitmap(
+                        content = formattedPayload,
+                        sizePx = 600,
+                        eccLevel = QrEccLevel.M
+                    )
+                }.getOrNull()
+            }
         }
     }
 
@@ -706,7 +681,7 @@ private fun UniversalStandardQrDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Generatore QR Universale (Wi-Fi / vCard / Testo)",
+                text = "QR Semplice",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -723,7 +698,13 @@ private fun UniversalStandardQrDialog(
                     items = StandardQrKind.entries,
                     selectedItem = selectedKind,
                     onItemSelected = { selectedKind = it },
-                    labelProvider = { it.label }
+                    labelProvider = {
+                        when (it) {
+                            StandardQrKind.WIFI -> "Wi-Fi"
+                            StandardQrKind.VCARD -> "Contatto"
+                            StandardQrKind.TEXT -> "Testo"
+                        }
+                    }
                 )
 
                 qrBitmap?.let { bmp ->
@@ -739,7 +720,7 @@ private fun UniversalStandardQrDialog(
                     ) {
                         Image(
                             bitmap = bmp.asImageBitmap(),
-                            contentDescription = "QR Standard Universale",
+                            contentDescription = "Codice QR semplice",
                             filterQuality = FilterQuality.None,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -751,7 +732,8 @@ private fun UniversalStandardQrDialog(
                         OutlinedTextField(
                             value = wifiSsid,
                             onValueChange = { wifiSsid = it },
-                            label = { Text("Nome Rete (SSID)") },
+                            label = { Text("Nome rete Wi-Fi") },
+                            placeholder = { Text("Es. Casa_WiFi") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -763,15 +745,11 @@ private fun UniversalStandardQrDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
                         SegmentedSelectorBar(
-                            items = listOf("WPA", "WEP", "nopass"),
-                            selectedItem = wifiSecurity,
+                            items = listOf("WPA", "nopass"),
+                            selectedItem = if (wifiSecurity == "nopass") "nopass" else "WPA",
                             onItemSelected = { wifiSecurity = it },
                             labelProvider = {
-                                when (it) {
-                                    "WPA" -> "WPA/WPA2/WPA3"
-                                    "WEP" -> "WEP"
-                                    else -> "Aperta"
-                                }
+                                if (it == "nopass") "Rete aperta" else "Con password"
                             }
                         )
                     }
@@ -779,7 +757,7 @@ private fun UniversalStandardQrDialog(
                         OutlinedTextField(
                             value = vcardName,
                             onValueChange = { vcardName = it },
-                            label = { Text("Nome e Cognome") },
+                            label = { Text("Nome e cognome") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -800,7 +778,7 @@ private fun UniversalStandardQrDialog(
                         OutlinedTextField(
                             value = vcardOrg,
                             onValueChange = { vcardOrg = it },
-                            label = { Text("Organizzazione") },
+                            label = { Text("Azienda o nota (opzionale)") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -809,7 +787,8 @@ private fun UniversalStandardQrDialog(
                         OutlinedTextField(
                             value = freeText,
                             onValueChange = { freeText = it },
-                            label = { Text("Testo o URL") },
+                            label = { Text("Testo o link") },
+                            placeholder = { Text("Scrivi un messaggio o incolla un link…") },
                             minLines = 3,
                             maxLines = 5,
                             modifier = Modifier.fillMaxWidth()
@@ -818,7 +797,7 @@ private fun UniversalStandardQrDialog(
                 }
 
                 Text(
-                    text = "Questo QR rispetta lo standard universale ed è scansionabile da qualsiasi fotocamera Android/iOS senza app.",
+                    text = "Questo QR si legge con la normale fotocamera di qualsiasi telefono.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant
                 )
@@ -830,12 +809,13 @@ private fun UniversalStandardQrDialog(
                     val fileName = when (selectedKind) {
                         StandardQrKind.WIFI -> "WiFi_${wifiSsid.ifBlank { "Rete" }}.txt"
                         StandardQrKind.VCARD -> "${vcardName.ifBlank { "Contatto" }}.vcf"
-                        StandardQrKind.TEXT -> "Nota_QR_Standard.txt"
+                        StandardQrKind.TEXT -> "Nota_QR.txt"
                     }
                     onTransmitAsOptiShareStream(fileName, formattedPayload)
-                }
+                },
+                enabled = hasContent
             ) {
-                Text("Invia anche in OptiShare")
+                Text("Salva e invia")
             }
         },
         dismissButton = {
@@ -849,8 +829,6 @@ private fun UniversalStandardQrDialog(
 @Composable
 private fun NackScannerDialog(
     hasCameraPermission: Boolean,
-    activeSessionId: String,
-    totalChunks: Int,
     onRequestCameraPermission: () -> Unit,
     onNackScanned: (String) -> Unit,
     onDismiss: () -> Unit
@@ -869,7 +847,7 @@ private fun NackScannerDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Scansiona QR Inverso NACK",
+                text = "Inquadra QR parti mancanti",
                 style = MaterialTheme.typography.titleLarge
             )
         },
@@ -879,7 +857,7 @@ private fun NackScannerDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Inquadra il codice QR NACK mostrato sul dispositivo ricevente per trasmettere solo i pacchetti mancanti.",
+                    text = "Inquadra il codice QR mostrato sull'altro telefono per inviare solo le parti che mancano.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colorScheme.onSurfaceVariant
                 )
@@ -888,7 +866,7 @@ private fun NackScannerDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(210.dp)
+                            .height(220.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color.Black)
                             .border(1.dp, colorScheme.primary, RoundedCornerShape(12.dp))
@@ -955,26 +933,8 @@ private fun NackScannerDialog(
                     ) {
                         Icon(Icons.Default.CameraAlt, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Autorizza Fotocamera per NACK")
+                        Text("Attiva fotocamera")
                     }
-                }
-
-                FilledTonalButton(
-                    onClick = {
-                        val sampleMissing = listOf(0, (totalChunks - 1).coerceAtLeast(0)).distinct()
-                        val simulatedNack = OpticalPacketProtocol.encodeNackQrString(
-                            sessionId = activeSessionId,
-                            missingIndices = sampleMissing
-                        )
-                        onNackScanned(simulatedNack)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("simulate_nack_scan_button")
-                ) {
-                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Simula Scansione NACK (Test Rapido)")
                 }
             }
         },
@@ -1003,7 +963,7 @@ private fun InAppPhotoCaptureDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Acquisisci Foto da Condividere",
+                text = "Scatta o scegli una foto",
                 style = MaterialTheme.typography.titleLarge
             )
         },
@@ -1047,23 +1007,6 @@ private fun InAppPhotoCaptureDialog(
                             },
                             modifier = Modifier.fillMaxSize()
                         )
-
-                        LiquidGlassPill(
-                            isDarkHud = true,
-                            cornerRadius = 9.dp,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(8.dp)
-                        ) {
-                            Text(
-                                text = "Anteprima Fotocamera Live",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
                     }
                 } else {
                     Surface(
@@ -1083,57 +1026,39 @@ private fun InAppPhotoCaptureDialog(
                                 modifier = Modifier.size(28.dp)
                             )
                             Text(
-                                text = "Concedi il permesso Fotocamera per scattare dal vivo oppure genera subito uno scatto simulato.",
+                                text = "Attiva la fotocamera per scattare una foto oppure scegline una dalla galleria.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colorScheme.onSurfaceVariant
                             )
                             OutlinedButton(onClick = onRequestCameraPermission) {
-                                Text("Autorizza Fotocamera")
+                                Text("Attiva fotocamera")
                             }
                         }
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FilledTonalButton(
+                    onClick = onPickFromGallery,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    FilledTonalButton(
-                        onClick = onPickFromGallery,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Galleria", style = MaterialTheme.typography.labelMedium)
-                    }
-
-                    FilledTonalButton(
-                        onClick = {
-                            onPhotoCaptured(generateSimulatedCameraBitmap())
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("capture_simulated_photo_button")
-                    ) {
-                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Foto Simulazione", style = MaterialTheme.typography.labelMedium)
-                    }
+                    Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Scegli dalla galleria", style = MaterialTheme.typography.labelMedium)
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    val captured = runCatching { previewViewRef?.bitmap }.getOrNull()
-                        ?: generateSimulatedCameraBitmap()
-                    onPhotoCaptured(captured)
-                },
-                modifier = Modifier.testTag("confirm_capture_photo_button")
-            ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Scatta e Codifica QR")
+            if (hasCameraPermission) {
+                Button(
+                    onClick = {
+                        previewViewRef?.bitmap?.let(onPhotoCaptured)
+                    },
+                    modifier = Modifier.testTag("confirm_capture_photo_button")
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Scatta foto")
+                }
             }
         },
         dismissButton = {
@@ -1144,50 +1069,6 @@ private fun InAppPhotoCaptureDialog(
     )
 }
 
-private fun generateSimulatedCameraBitmap(): Bitmap {
-    val width = 400
-    val height = 300
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = AndroidCanvas(bitmap)
-
-    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.rgb(24, 34, 52)
-        style = Paint.Style.FILL
-    }
-    canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
-
-    val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.argb(50, 170, 199, 255)
-        strokeWidth = 2f
-    }
-    for (x in 0..width step 40) {
-        canvas.drawLine(x.toFloat(), 0f, x.toFloat(), height.toFloat(), gridPaint)
-    }
-    for (y in 0..height step 40) {
-        canvas.drawLine(0f, y.toFloat(), width.toFloat(), y.toFloat(), gridPaint)
-    }
-
-    val targetPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.rgb(59, 130, 246)
-        style = Paint.Style.STROKE
-        strokeWidth = 5f
-    }
-    canvas.drawCircle(width / 2f, height / 2f, 70f, targetPaint)
-
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE
-        textSize = 22f
-        isFakeBoldText = true
-    }
-    val timestamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
-    canvas.drawText("OPTISHARE CAM SNAPSHOT", 52f, 54f, textPaint)
-    textPaint.textSize = 16f
-    textPaint.isFakeBoldText = false
-    canvas.drawText("TIME: $timestamp • 400x300 JPEG", 76f, 260f, textPaint)
-
-    return bitmap
-}
-
 @Composable
 private fun SourceToolbarPanel(
     senderState: SenderUiState,
@@ -1196,7 +1077,6 @@ private fun SourceToolbarPanel(
     onCapturePhoto: () -> Unit,
     onOpenNoteModal: () -> Unit,
     onOpenStandardQrModal: () -> Unit,
-    onLoadDemo: () -> Unit,
     onOpenEncryptionDialog: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -1206,7 +1086,7 @@ private fun SourceToolbarPanel(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Primary action row: Pick File + ZIP + AES lock toggle
+        // Primary action row: Pick File + ZIP + Password lock toggle
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1241,12 +1121,12 @@ private fun SourceToolbarPanel(
             ) {
                 Icon(
                     imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                    contentDescription = if (isEncrypted) "Crittografia AES attiva" else "Crittografia AES disattiva",
+                    contentDescription = if (isEncrypted) "Password attiva" else "Imposta password",
                     tint = if (isEncrypted) colorScheme.tertiary else colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = if (isEncrypted) "AES" else "Chiaro",
+                    text = if (isEncrypted) "Protetto" else "Password",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (isEncrypted) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1255,7 +1135,7 @@ private fun SourceToolbarPanel(
             }
         }
 
-        // Secondary compact horizontal quick-source strip
+        // Secondary compact horizontal quick-source strip (no demo/simulation)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1276,16 +1156,10 @@ private fun SourceToolbarPanel(
                 testTag = "create_note_button"
             )
             CompactQuickChip(
-                label = "QR Std",
+                label = "QR Semplice",
                 icon = Icons.Default.QrCode2,
                 onClick = onOpenStandardQrModal,
                 testTag = "open_standard_qr_button"
-            )
-            CompactQuickChip(
-                label = "Demo",
-                icon = Icons.Default.Description,
-                onClick = onLoadDemo,
-                testTag = "load_sample_button"
             )
         }
     }
@@ -1305,18 +1179,18 @@ private fun CompactQuickChip(
         color = colorScheme.surfaceVariant.copy(alpha = 0.45f),
         contentColor = colorScheme.onSurfaceVariant,
         modifier = Modifier
-            .defaultMinSize(minHeight = 36.dp)
+            .defaultMinSize(minHeight = 40.dp)
             .testTag(testTag)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(15.dp)
             )
             Text(
                 text = label,
@@ -1331,11 +1205,11 @@ private fun CompactQuickChip(
 @Composable
 private fun OpticalStagePanel(
     senderState: SenderUiState,
+    onPickFile: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onStepFrame: (Int) -> Unit,
     onOpenEncryptionDialog: () -> Unit,
-    onOpenNackScanner: () -> Unit,
-    onNavigateToReceiveLoopback: () -> Unit
+    onOpenNackScanner: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val haptics = rememberOptiShareHaptics()
@@ -1356,7 +1230,7 @@ private fun OpticalStagePanel(
                     modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Preparazione QR…",
+                    text = "Preparazione codici QR…",
                     style = MaterialTheme.typography.labelMedium,
                     color = colorScheme.onSurfaceVariant
                 )
@@ -1380,6 +1254,12 @@ private fun OpticalStagePanel(
             ),
             label = "QrFrameProgress120Hz"
         )
+
+        val speedLabel = when {
+            senderState.fps <= 5 -> "Lenta"
+            senderState.fps <= 10 -> "Normale"
+            else -> "Veloce"
+        }
 
         OptiShareCard(
             isHighlighted = true,
@@ -1410,7 +1290,7 @@ private fun OpticalStagePanel(
                         if (stream.isEncrypted) {
                             Icon(
                                 Icons.Default.Lock,
-                                contentDescription = "Cifrato AES-256-GCM",
+                                contentDescription = "Protetto con password",
                                 tint = colorScheme.tertiary,
                                 modifier = Modifier
                                     .size(14.dp)
@@ -1421,12 +1301,11 @@ private fun OpticalStagePanel(
 
                     Text(
                         text = if (isParity) {
-                            "FEC ${currentPacket.displayNumber}"
+                            "Recupero"
                         } else {
-                            "${currentPacket.displayNumber}/${stream.dataPackets.size}"
+                            "${currentPacket.displayNumber} di ${stream.dataPackets.size}"
                         },
                         style = MaterialTheme.typography.labelMedium,
-                        fontFamily = JetBrainsMonoFontFamily,
                         color = statusAccent,
                         maxLines = 1,
                         softWrap = false
@@ -1449,7 +1328,7 @@ private fun OpticalStagePanel(
                 ) {
                     Image(
                         bitmap = currentImageBitmap,
-                        contentDescription = "Codice QR Pacchetto ${currentPacket.displayNumber}",
+                        contentDescription = "Codice QR ${safeIndex + 1} di ${cachedImageBitmaps.size}",
                         filterQuality = FilterQuality.None,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -1475,22 +1354,15 @@ private fun OpticalStagePanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "%02d/%02d · %.1f KB/s".format(
-                            Locale.US,
-                            safeIndex + 1,
-                            cachedImageBitmaps.size,
-                            senderState.theoreticalThroughputKbps
-                        ),
+                        text = "QR ${safeIndex + 1} di ${cachedImageBitmaps.size}",
                         style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
                         color = colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${senderState.fps} FPS",
+                        text = "Velocità: $speedLabel",
                         style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
                         color = colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         softWrap = false
@@ -1517,7 +1389,7 @@ private fun OpticalStagePanel(
                     ) {
                         Icon(
                             Icons.Default.SkipPrevious,
-                            contentDescription = "Frame precedente",
+                            contentDescription = "QR precedente",
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -1547,60 +1419,90 @@ private fun OpticalStagePanel(
                     ) {
                         Icon(
                             Icons.Default.SkipNext,
-                            contentDescription = "Frame successivo",
+                            contentDescription = "QR successivo",
                             modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
-                // Quiet secondary actions row
-                Row(
+                // Helpful optional action when receiver needs missing parts
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    contentAlignment = Alignment.Center
                 ) {
                     TextButton(
                         onClick = onOpenNackScanner,
                         modifier = Modifier.testTag("scan_nack_from_sender_button")
                     ) {
                         Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text("Scansiona NACK", style = MaterialTheme.typography.labelMedium)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Parti mancanti? Inquadra QR", style = MaterialTheme.typography.labelMedium)
                     }
-
-                    TextButton(
-                        onClick = onNavigateToReceiveLoopback,
-                        modifier = Modifier.testTag("run_loopback_from_sender_button")
-                    ) {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text("Test loopback", style = MaterialTheme.typography.labelMedium)
-                    }
+                }
+            }
+        }
+    } else {
+        OptiShareCard(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 36.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCode2,
+                    contentDescription = null,
+                    tint = colorScheme.primary,
+                    modifier = Modifier.size(42.dp)
+                )
+                Text(
+                    text = "Pronto per inviare",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "Scegli un file, crea uno ZIP, scatta una foto o scrivi una nota. L'altro telefono dovrà solo inquadrare i QR dalla scheda Ricevi.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                FilledTonalButton(onClick = onPickFile) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Scegli un file")
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun InspectorTabbedPanel(
+private fun SenderSimpleOptionsPanel(
     senderState: SenderUiState,
-    stream: PreparedOpticalStream,
     onFpsChange: (Int) -> Unit,
     onUpdateConfig: (Int?, QrEccLevel?) -> Unit,
     onToggleAutoMaxBrightness: () -> Unit,
-    onOpenNackScanner: () -> Unit,
-    onToggleMissingChunkFilter: (Int) -> Unit,
-    onClearMissingChunkFilter: () -> Unit
+    onOpenNackScanner: () -> Unit
 ) {
-    val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     val haptics = rememberOptiShareHaptics()
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var activeTab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("Dettagli", "Velocità & QR", "NACK")
+
+    val selectedSpeedTier = when {
+        senderState.fps <= 5 -> 4
+        senderState.fps <= 10 -> 8
+        else -> 14
+    }
+    val speedSummary = when (selectedSpeedTier) {
+        4 -> "Lenta"
+        8 -> "Normale"
+        else -> "Veloce"
+    }
+    val highReadability = senderState.chunkSize <= 240
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1617,12 +1519,12 @@ private fun InspectorTabbedPanel(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Opzioni flusso",
+                        text = "Opzioni invio",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "${senderState.fps} FPS · ${senderState.chunkSize} B · ECC ${senderState.eccLevel.name}",
+                        text = "Velocità $speedSummary · ${if (senderState.autoMaxBrightness) "Luminosità max" else "Luminosità auto"}",
                         style = MaterialTheme.typography.labelSmall,
                         color = colorScheme.onSurfaceVariant
                     )
@@ -1643,261 +1545,102 @@ private fun InspectorTabbedPanel(
                 ) {
                     HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-                    SegmentedSelectorBar(
-                        items = tabs.indices.toList(),
-                        selectedItem = activeTab,
-                        onItemSelected = { activeTab = it },
-                        labelProvider = { idx ->
-                            if (idx == 2 && senderState.selectedMissingDataIndices.isNotEmpty()) {
-                                "NACK (${senderState.selectedMissingDataIndices.size})"
-                            } else {
-                                tabs[idx]
-                            }
-                        }
-                    )
-
-                    when (activeTab) {
-                        0 -> {
-                            val ratio = if (stream.originalBytes.isNotEmpty()) {
-                                val pct = (stream.compressedBytes.size.toFloat() / stream.originalBytes.size.toFloat()) * 100f
-                                "%.0f%%".format(pct)
-                            } else "100%"
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                TelemetryMetricCell(
-                                    label = "Originale",
-                                    value = "${stream.originalBytes.size} B",
-                                    modifier = Modifier.weight(1f)
-                                )
-                                TelemetryMetricCell(
-                                    label = if (stream.isEncrypted) "GZIP + AES" else "GZIP",
-                                    value = "${stream.compressedBytes.size} B ($ratio)",
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                TelemetryMetricCell(
-                                    label = "Velocità",
-                                    value = String.format(Locale.US, "%.1f KB/s", senderState.theoreticalThroughputKbps),
-                                    valueColor = colorScheme.tertiary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                TelemetryMetricCell(
-                                    label = "Codifica",
-                                    value = "${senderState.encodingDurationMs} ms (${stream.allOrderedPackets.size} QR)",
-                                    valueColor = colorScheme.primary,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "SHA-256",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = stream.fileSha256,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontFamily = JetBrainsMonoFontFamily,
-                                        color = colorScheme.tertiary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        haptics.confirmSuccess()
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                        clipboard?.setPrimaryClip(ClipData.newPlainText("SHA-256", stream.fileSha256))
-                                        Toast.makeText(context, "SHA-256 copiato", Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.ContentCopy,
-                                        contentDescription = "Copia SHA-256",
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Velocità dei codici QR",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        SegmentedSelectorBar(
+                            items = listOf(4, 8, 14),
+                            selectedItem = selectedSpeedTier,
+                            onItemSelected = { onFpsChange(it) },
+                            labelProvider = { tier ->
+                                when (tier) {
+                                    4 -> "Lenta"
+                                    8 -> "Normale"
+                                    else -> "Veloce"
                                 }
                             }
-                        }
+                        )
+                    }
 
-                        1 -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Velocità flusso",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Text(
-                                        text = "${senderState.fps} FPS",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = colorScheme.primary
-                                    )
-                                }
-                                Slider(
-                                    value = senderState.fps.toFloat(),
-                                    onValueChange = { onFpsChange(it.toInt()) },
-                                    valueRange = 1f..24f,
-                                    steps = 22,
-                                    modifier = Modifier.testTag("fps_slider")
-                                )
-                                SegmentedSelectorBar(
-                                    items = listOf(6, 12, 20, 24),
-                                    selectedItem = senderState.fps,
-                                    onItemSelected = { onFpsChange(it) },
-                                    labelProvider = { "$it FPS" }
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(end = 12.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.BrightnessHigh,
-                                        contentDescription = null,
-                                        tint = colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = "Luminosità max durante l'invio",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Switch(
-                                    checked = senderState.autoMaxBrightness,
-                                    onCheckedChange = {
-                                        haptics.toggle(!senderState.autoMaxBrightness)
-                                        onToggleAutoMaxBrightness()
-                                    },
-                                    modifier = Modifier.testTag("switch_auto_max_brightness")
-                                )
-                            }
-
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.BrightnessHigh,
+                                contentDescription = null,
+                                tint = colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Text(
-                                text = "Densità payload",
+                                text = "Luminosità massima durante l'invio",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            SegmentedSelectorBar(
-                                items = listOf(240, 380, 550),
-                                selectedItem = senderState.chunkSize,
-                                onItemSelected = { size -> onUpdateConfig(size, null) },
-                                labelProvider = { size ->
-                                    when (size) {
-                                        240 -> "240 B"
-                                        380 -> "380 B"
-                                        else -> "550 B"
-                                    }
-                                }
-                            )
+                        }
+                        Switch(
+                            checked = senderState.autoMaxBrightness,
+                            onCheckedChange = {
+                                haptics.toggle(!senderState.autoMaxBrightness)
+                                onToggleAutoMaxBrightness()
+                            },
+                            modifier = Modifier.testTag("switch_auto_max_brightness")
+                        )
+                    }
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
+                        ) {
                             Text(
-                                text = "Correzione errori (ECC)",
+                                text = "QR più grandi e facili da leggere",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            SegmentedSelectorBar(
-                                items = QrEccLevel.entries,
-                                selectedItem = senderState.eccLevel,
-                                onItemSelected = { ecc -> onUpdateConfig(null, ecc) },
-                                labelProvider = { it.label }
+                            Text(
+                                text = "Utile se lo schermo è piccolo o c'è molta luce",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colorScheme.onSurfaceVariant
                             )
                         }
-
-                        2 -> {
-                            FilledTonalButton(
-                                onClick = {
-                                    haptics.selectionTick()
-                                    onOpenNackScanner()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Scansiona QR NACK")
-                            }
-
-                            if (senderState.selectedMissingDataIndices.isNotEmpty()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Filtro: ${senderState.selectedMissingDataIndices.size}/${stream.dataPackets.size} PKT",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = colorScheme.primary
-                                    )
-                                    TextButton(
-                                        onClick = {
-                                            haptics.toggle(false)
-                                            onClearMissingChunkFilter()
-                                        }
-                                    ) {
-                                        Text("Ripristina")
-                                    }
+                        Switch(
+                            checked = highReadability,
+                            onCheckedChange = { enabled ->
+                                haptics.toggle(enabled)
+                                if (enabled) {
+                                    onUpdateConfig(240, QrEccLevel.Q)
+                                } else {
+                                    onUpdateConfig(380, QrEccLevel.M)
                                 }
-                            }
+                            },
+                            modifier = Modifier.testTag("switch_high_readability_qr")
+                        )
+                    }
 
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                for (i in 0 until stream.dataPackets.size) {
-                                    val isSelected = senderState.selectedMissingDataIndices.contains(i)
-                                    Box(
-                                        modifier = Modifier
-                                            .size(width = 52.dp, height = 36.dp)
-                                            .clip(MaterialTheme.shapes.small)
-                                            .background(
-                                                if (isSelected) colorScheme.secondaryContainer
-                                                else colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                            )
-                                            .border(
-                                                width = 1.dp,
-                                                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                                shape = MaterialTheme.shapes.small
-                                            )
-                                            .clickable {
-                                                haptics.selectionTick()
-                                                onToggleMissingChunkFilter(i)
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "D#${i + 1}",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = if (isSelected) colorScheme.onSecondaryContainer else colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    FilledTonalButton(
+                        onClick = {
+                            haptics.selectionTick()
+                            onOpenNackScanner()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Inquadra QR parti mancanti")
                     }
                 }
             }

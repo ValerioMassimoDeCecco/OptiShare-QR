@@ -40,20 +40,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.FolderSpecial
-import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.FolderSpecial
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.QrCode2
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -102,7 +97,6 @@ import com.example.ui.screens.ReceiveScanScreen
 import com.example.ui.screens.SendQrScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.VaultScreen
-import com.example.ui.theme.DesignStyle
 import com.example.ui.theme.OptiShareTheme
 import com.example.ui.theme.ThemeSettingsManager
 import com.example.viewmodel.TransferViewModel
@@ -251,7 +245,6 @@ fun OptiShareApp(
         }
     }
 
-    val isLiquidGlass = customization.designStyle == DesignStyle.LIQUID_GLASS
     val colorScheme = MaterialTheme.colorScheme
     val glassTokens = rememberLiquidGlassTokens(customization)
     val haptics = rememberOptiShareHaptics()
@@ -288,50 +281,6 @@ fun OptiShareApp(
                                     softWrap = false,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                            }
-                        },
-                        actions = {
-                            Surface(
-                                onClick = {
-                                    val nextIsGlass = customization.designStyle == DesignStyle.MATERIAL
-                                    haptics.toggle(nextIsGlass)
-                                    themeManager.update { current ->
-                                        val nextStyle = if (current.designStyle == DesignStyle.MATERIAL) {
-                                            DesignStyle.LIQUID_GLASS
-                                        } else {
-                                            DesignStyle.MATERIAL
-                                        }
-                                        current.copy(designStyle = nextStyle)
-                                    }
-                                },
-                                shape = RoundedCornerShape(20.dp),
-                                color = colorScheme.surfaceVariant.copy(
-                                    alpha = if (glassTokens.reduceTransparency) 0.9f else 0.55f
-                                ),
-                                contentColor = colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .padding(end = 12.dp)
-                                    .defaultMinSize(minHeight = 36.dp)
-                                    .testTag("quick_style_toggle_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isLiquidGlass) Icons.Default.BlurOn else Icons.Default.Layers,
-                                        contentDescription = "Cambia stile Material o Liquid Glass",
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = if (isLiquidGlass) "Glass" else "Material",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -439,9 +388,6 @@ fun OptiShareApp(
                                             onCreateTextNote = { title, content ->
                                                 transferViewModel.prepareStreamFromTextNote(title, content)
                                             },
-                                            onLoadSampleFile = {
-                                                transferViewModel.loadSampleSpecDocument()
-                                            },
                                             onTogglePlayPause = {
                                                 transferViewModel.toggleSenderPlayPause()
                                             },
@@ -465,16 +411,6 @@ fun OptiShareApp(
                                             },
                                             onScanNackQr = { qrStr ->
                                                 transferViewModel.applyScannedNackQr(qrStr)
-                                            },
-                                            onToggleMissingChunkFilter = { idx ->
-                                                transferViewModel.toggleMissingChunkFilter(idx)
-                                            },
-                                            onClearMissingChunkFilter = {
-                                                transferViewModel.clearMissingChunkFilter()
-                                            },
-                                            onNavigateToReceiveLoopback = {
-                                                currentTab = OptiShareTab.RECEIVE
-                                                transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
                                             }
                                         )
                                     }
@@ -487,9 +423,6 @@ fun OptiShareApp(
                                             },
                                             onResetSession = {
                                                 transferViewModel.resetReceiverSession()
-                                            },
-                                            onStartLoopbackSimulation = {
-                                                transferViewModel.startOpticalLoopbackSimulation(simulateFrameDrops = true)
                                             },
                                             onGenerateNackQr = {
                                                 transferViewModel.generateReceiverNackQr()
@@ -670,7 +603,7 @@ private fun FloatingMaterialNavigationBar(
                     ) {
                         Icon(
                             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                            contentDescription = labelText,
+                            contentDescription = null,
                             modifier = Modifier
                                 .size(20.dp)
                                 .graphicsLayer {

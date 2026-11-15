@@ -1,0 +1,4 @@
+Versione 1.05:
+- Firma persistente dell'APK: i futuri aggiornamenti possono essere installati direttamente sopra questa versione senza disinstallare l'app
+- Interfaccia semplificata per tutti: linguaggio chiaro e immediato al posto di parametri tecnici e sigle avanzate
+- Rimosse tutte le opzioni demo, dati di esempio e simulazioni: pronto all'uso fin dall'apertura

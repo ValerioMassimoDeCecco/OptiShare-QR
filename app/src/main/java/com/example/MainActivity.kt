@@ -266,128 +266,82 @@ fun OptiShareApp(
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets.safeDrawing,
                 topBar = {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        TopAppBar(
-                            scrollBehavior = scrollBehavior,
-                            title = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(11.dp),
-                                        color = colorScheme.primaryContainer.copy(
-                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.90f
-                                        ),
-                                        contentColor = colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.liquidGlassRimAndHighlight(
-                                            cornerRadius = 11.dp,
-                                            accentColor = colorScheme.primary,
-                                            isDark = glassTokens.isDark,
-                                            specularAlpha = glassTokens.specularRimAlpha,
-                                            meniscusAlpha = glassTokens.innerMeniscusAlpha,
-                                            refractionAlpha = 0f
-                                        )
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.QrCode2,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .padding(7.dp)
-                                                .size(20.dp)
-                                        )
-                                    }
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(1.dp),
-                                        modifier = Modifier.testTag("refresh_rate_badge")
-                                    ) {
-                                        Text(
-                                            text = "OptiShare QR",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "Offline · v1.04 · ${activeRefreshRateHz}Hz",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colorScheme.primary,
-                                            fontWeight = FontWeight.Medium,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            },
-                            actions = {
-                                FilledTonalButton(
-                                    onClick = {
-                                        val nextIsGlass = customization.designStyle == DesignStyle.MATERIAL
-                                        haptics.toggle(nextIsGlass)
-                                        themeManager.update { current ->
-                                            val nextStyle = if (current.designStyle == DesignStyle.MATERIAL) {
-                                                DesignStyle.LIQUID_GLASS
-                                            } else {
-                                                DesignStyle.MATERIAL
-                                            }
-                                            current.copy(designStyle = nextStyle)
+                    TopAppBar(
+                        scrollBehavior = scrollBehavior,
+                        title = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.testTag("refresh_rate_badge")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.QrCode2,
+                                    contentDescription = null,
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "OptiShare QR",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        },
+                        actions = {
+                            Surface(
+                                onClick = {
+                                    val nextIsGlass = customization.designStyle == DesignStyle.MATERIAL
+                                    haptics.toggle(nextIsGlass)
+                                    themeManager.update { current ->
+                                        val nextStyle = if (current.designStyle == DesignStyle.MATERIAL) {
+                                            DesignStyle.LIQUID_GLASS
+                                        } else {
+                                            DesignStyle.MATERIAL
                                         }
-                                    },
-                                    shape = RoundedCornerShape(12.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = colorScheme.secondaryContainer.copy(
-                                            alpha = if (glassTokens.reduceTransparency) 1f else 0.85f
-                                        ),
-                                        contentColor = colorScheme.onSecondaryContainer
-                                    ),
-                                    modifier = Modifier
-                                        .padding(end = 12.dp)
-                                        .defaultMinSize(minHeight = 40.dp)
-                                        .liquidGlassRimAndHighlight(
-                                            cornerRadius = 12.dp,
-                                            accentColor = colorScheme.primary,
-                                            isDark = glassTokens.isDark,
-                                            specularAlpha = (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.55f),
-                                            meniscusAlpha = glassTokens.innerMeniscusAlpha,
-                                            refractionAlpha = glassTokens.refractionTintAlpha * 0.5f
-                                        )
-                                        .testTag("quick_style_toggle_button")
+                                        current.copy(designStyle = nextStyle)
+                                    }
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                color = colorScheme.surfaceVariant.copy(
+                                    alpha = if (glassTokens.reduceTransparency) 0.9f else 0.55f
+                                ),
+                                contentColor = colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(end = 12.dp)
+                                    .defaultMinSize(minHeight = 36.dp)
+                                    .testTag("quick_style_toggle_button")
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (isLiquidGlass) Icons.Default.BlurOn else Icons.Default.Layers,
                                         contentDescription = "Cambia stile Material o Liquid Glass",
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (isLiquidGlass) "Liquid Glass" else "Material 3",
+                                        text = if (isLiquidGlass) "Glass" else "Material",
                                         style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Medium,
                                         maxLines = 1,
                                         softWrap = false
                                     )
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = colorScheme.surface.copy(alpha = glassTokens.barSurfaceAlpha),
-                                scrolledContainerColor = colorScheme.surfaceVariant.copy(
-                                    alpha = (glassTokens.barSurfaceAlpha + 0.04f).coerceAtMost(0.98f)
-                                ),
-                                titleContentColor = colorScheme.onBackground
-                            )
-                        )
-                        HorizontalDivider(
-                            thickness = 1.dp,
-                            color = if (isLiquidGlass) {
-                                colorScheme.primary.copy(alpha = 0.22f)
-                            } else {
-                                colorScheme.outlineVariant.copy(alpha = 0.55f)
                             }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = colorScheme.surface.copy(
+                                alpha = (glassTokens.barSurfaceAlpha + 0.04f).coerceAtMost(0.98f)
+                            ),
+                            titleContentColor = colorScheme.onBackground
                         )
-                    }
+                    )
                 }
             ) { innerPadding ->
                 Box(
@@ -446,12 +400,8 @@ fun OptiShareApp(
                                     Spacer(modifier = Modifier.weight(0.85f))
                                 }
                                 VerticalDivider(
-                                    thickness = 1.dp,
-                                    color = if (isLiquidGlass) {
-                                        colorScheme.primary.copy(alpha = 0.22f)
-                                    } else {
-                                        colorScheme.outlineVariant.copy(alpha = 0.55f)
-                                    }
+                                    thickness = 0.75.dp,
+                                    color = colorScheme.outlineVariant.copy(alpha = 0.4f)
                                 )
                             }
                         }
@@ -596,14 +546,14 @@ fun OptiShareApp(
                         }
                     }
 
-                    // Floating Bottom Navigation Bar on compact/mobile screens
+                    // Minimal Floating Bottom Navigation Bar on compact/mobile screens
                     if (!isExpandedScreen) {
                         FloatingMaterialNavigationBar(
                             currentTab = currentTab,
                             onSelectTab = { currentTab = it },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
                         )
                     }
                 }
@@ -613,10 +563,8 @@ fun OptiShareApp(
 }
 
 /**
- * Floating Bottom Navigation Bar with iOS-inspired Liquid Glass refinement:
- * Detached from the screen edges with balanced 24dp corners, frosted translucency,
- * directional specular rim, top 1dp meniscus highlight, and 120Hz spring states
- * (normal, pressed, selected, and focused).
+ * Minimal Floating Bottom Navigation Bar with clean M3/Liquid Glass translucency,
+ * balanced spacing, and native selection haptics.
  */
 @Composable
 private fun FloatingMaterialNavigationBar(
@@ -633,17 +581,17 @@ private fun FloatingMaterialNavigationBar(
     LiquidGlassBarSurface(
         cornerRadius = 24.dp,
         accentTint = colorScheme.primary,
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp,
+        tonalElevation = 2.dp,
+        shadowElevation = 4.dp,
         modifier = modifier
-            .widthIn(max = 460.dp)
+            .widthIn(max = 420.dp)
             .fillMaxWidth()
             .testTag("floating_bottom_navigation_bar")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -658,7 +606,7 @@ private fun FloatingMaterialNavigationBar(
                     targetValue = when {
                         !selected -> Color.Transparent
                         glassTokens.reduceTransparency -> colorScheme.secondaryContainer
-                        else -> colorScheme.secondaryContainer.copy(alpha = 0.86f)
+                        else -> colorScheme.secondaryContainer.copy(alpha = 0.85f)
                     },
                     animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
                     label = "NavTabContainer120Hz"
@@ -671,7 +619,7 @@ private fun FloatingMaterialNavigationBar(
                 val iconScale by animateFloatAsState(
                     targetValue = when {
                         isPressed && !glassTokens.reduceMotion -> 0.94f
-                        selected && !glassTokens.reduceMotion -> 1.06f
+                        selected && !glassTokens.reduceMotion -> 1.04f
                         else -> 1.0f
                     },
                     animationSpec = spring(
@@ -694,20 +642,16 @@ private fun FloatingMaterialNavigationBar(
                     interactionSource = interactionSource,
                     modifier = Modifier
                         .weight(1f)
-                        .defaultMinSize(minHeight = 56.dp)
+                        .defaultMinSize(minHeight = 48.dp)
                         .then(
-                            if (selected || isFocused) {
+                            if (isFocused) {
                                 Modifier.liquidGlassRimAndHighlight(
                                     cornerRadius = itemRadius,
                                     accentColor = colorScheme.primary,
                                     isDark = glassTokens.isDark,
-                                    specularAlpha = if (isFocused) {
-                                        (glassTokens.specularRimAlpha * 1.5f).coerceAtMost(0.75f)
-                                    } else {
-                                        (glassTokens.specularRimAlpha * 1.15f).coerceAtMost(0.55f)
-                                    },
+                                    specularAlpha = (glassTokens.specularRimAlpha * 1.5f).coerceAtMost(0.75f),
                                     meniscusAlpha = glassTokens.innerMeniscusAlpha,
-                                    refractionAlpha = glassTokens.refractionTintAlpha * 0.7f
+                                    refractionAlpha = 0f
                                 )
                             } else {
                                 Modifier
@@ -720,7 +664,7 @@ private fun FloatingMaterialNavigationBar(
                         .testTag(tab.testTag)
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -728,16 +672,16 @@ private fun FloatingMaterialNavigationBar(
                             imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
                             contentDescription = labelText,
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(20.dp)
                                 .graphicsLayer {
                                     scaleX = iconScale
                                     scaleY = iconScale
                                 }
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = labelText,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,
                             softWrap = false,

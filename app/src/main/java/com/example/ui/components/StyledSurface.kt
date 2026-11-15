@@ -606,15 +606,15 @@ fun OptiShareCard(
     }
 
     val borderColor = when {
-        isHighlighted && accentTint != null -> accentTint.copy(alpha = 0.55f)
-        isHighlighted -> colorScheme.primary.copy(alpha = 0.45f)
-        else -> colorScheme.outlineVariant.copy(alpha = 0.65f)
+        isHighlighted && accentTint != null -> accentTint.copy(alpha = 0.36f)
+        isHighlighted -> colorScheme.primary.copy(alpha = 0.30f)
+        else -> colorScheme.outlineVariant.copy(alpha = 0.40f)
     }
 
     val borderWidth = if (tokens.isLiquidGlassMode) {
-        1.dp
+        0.75.dp
     } else {
-        custom.materialBorderWidthDp.dp
+        custom.materialBorderWidthDp.coerceAtMost(1f).dp
     }
 
     val borderStroke = if (borderWidth > 0.05.dp) {
@@ -625,7 +625,7 @@ fun OptiShareCard(
 
     val tonalElevation = when {
         !custom.materialUseTonalElevation -> 0.dp
-        isHighlighted -> 3.dp
+        isHighlighted -> 2.dp
         else -> 1.dp
     }
 
@@ -645,7 +645,7 @@ fun OptiShareCard(
 }
 
 /**
- * Clean Material 3 section header with a readable subtitle/overline and primary title.
+ * Clean Material 3 section header with an optional subtle overline and primary title.
  */
 @Composable
 fun SectionHeaderRow(
@@ -665,18 +665,21 @@ fun SectionHeaderRow(
                 .weight(1f)
                 .padding(end = if (trailingContent != null) 8.dp else 0.dp)
         ) {
-            Text(
-                text = overline,
-                style = MaterialTheme.typography.labelMedium,
-                color = colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
+            if (overline.isNotBlank()) {
+                Text(
+                    text = overline,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(1.dp))
+            }
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

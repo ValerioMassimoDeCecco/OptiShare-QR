@@ -32,6 +32,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,6 +61,8 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Image
@@ -1198,130 +1202,128 @@ private fun SourceToolbarPanel(
     val colorScheme = MaterialTheme.colorScheme
     val isEncrypted = senderState.encryptionPassword.isNotBlank()
 
-    OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Primary action row: Pick File + ZIP + AES lock toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            InstrumentActionButton(
+                label = "Scegli file",
+                icon = Icons.Default.FolderOpen,
+                onClick = onPickFile,
+                isPrimary = true,
+                modifier = Modifier
+                    .weight(1.4f)
+                    .testTag("pick_file_button")
+            )
+            InstrumentActionButton(
+                label = "ZIP",
+                icon = Icons.Default.FolderZip,
+                onClick = onPickMultiZip,
+                modifier = Modifier
+                    .weight(0.9f)
+                    .testTag("pick_multi_zip_button")
+            )
+            LiquidGlassPill(
+                onClick = onOpenEncryptionDialog,
+                selected = isEncrypted,
+                cornerRadius = 12.dp,
+                accentColor = if (isEncrypted) colorScheme.tertiary else colorScheme.primary,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp),
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 48.dp)
+                    .testTag("toggle_aes_encryption_chip")
             ) {
+                Icon(
+                    imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
+                    contentDescription = if (isEncrypted) "Crittografia AES attiva" else "Crittografia AES disattiva",
+                    tint = if (isEncrypted) colorScheme.tertiary else colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
                 Text(
-                    text = "Sorgente file",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = colorScheme.onSurface,
+                    text = if (isEncrypted) "AES" else "Chiaro",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isEncrypted) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 8.dp)
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LiquidGlassPill(
-                        onClick = onOpenEncryptionDialog,
-                        selected = isEncrypted,
-                        cornerRadius = 9.dp,
-                        accentColor = if (isEncrypted) colorScheme.tertiary else colorScheme.primary,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
-                        modifier = Modifier.testTag("toggle_aes_encryption_chip")
-                    ) {
-                        Icon(
-                            imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                            contentDescription = null,
-                            tint = if (isEncrypted) colorScheme.tertiary else colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = if (isEncrypted) "AES-256 ON" else "AES-256 OFF",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isEncrypted) colorScheme.onSecondaryContainer else colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-
-                    LiquidGlassPill(
-                        selected = false,
-                        cornerRadius = 9.dp,
-                        accentColor = colorScheme.secondary,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = "GZIP · XOR",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                InstrumentActionButton(
-                    label = "File",
-                    icon = Icons.Default.FolderOpen,
-                    onClick = onPickFile,
-                    isPrimary = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("pick_file_button")
-                )
-                InstrumentActionButton(
-                    label = "ZIP Multi",
-                    icon = Icons.Default.FolderZip,
-                    onClick = onPickMultiZip,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("pick_multi_zip_button")
-                )
-                InstrumentActionButton(
-                    label = "Foto",
-                    icon = Icons.Default.AddPhotoAlternate,
-                    onClick = onCapturePhoto,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("capture_photo_sender_button")
+                    softWrap = false
                 )
             }
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                InstrumentActionButton(
-                    label = "Nota",
-                    icon = Icons.Default.EditNote,
-                    onClick = onOpenNoteModal,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("create_note_button")
-                )
-                InstrumentActionButton(
-                    label = "QR Std",
-                    icon = Icons.Default.QrCode2,
-                    onClick = onOpenStandardQrModal,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("open_standard_qr_button")
-                )
-                InstrumentActionButton(
-                    label = "Demo",
-                    icon = Icons.Default.Description,
-                    onClick = onLoadDemo,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("load_sample_button")
-                )
-            }
+        // Secondary compact horizontal quick-source strip
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CompactQuickChip(
+                label = "Foto",
+                icon = Icons.Default.AddPhotoAlternate,
+                onClick = onCapturePhoto,
+                testTag = "capture_photo_sender_button"
+            )
+            CompactQuickChip(
+                label = "Nota",
+                icon = Icons.Default.EditNote,
+                onClick = onOpenNoteModal,
+                testTag = "create_note_button"
+            )
+            CompactQuickChip(
+                label = "QR Std",
+                icon = Icons.Default.QrCode2,
+                onClick = onOpenStandardQrModal,
+                testTag = "open_standard_qr_button"
+            )
+            CompactQuickChip(
+                label = "Demo",
+                icon = Icons.Default.Description,
+                onClick = onLoadDemo,
+                testTag = "load_sample_button"
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactQuickChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        color = colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        contentColor = colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .defaultMinSize(minHeight = 36.dp)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
@@ -1351,10 +1353,10 @@ private fun OpticalStagePanel(
             ) {
                 CircularProgressIndicator(
                     strokeWidth = 2.5.dp,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(28.dp)
                 )
                 Text(
-                    text = "Generazione QR multi-core, GZIP e parità XOR...",
+                    text = "Preparazione QR…",
                     style = MaterialTheme.typography.labelMedium,
                     color = colorScheme.onSurfaceVariant
                 )
@@ -1390,76 +1392,57 @@ private fun OpticalStagePanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .weight(1f)
                             .padding(end = 8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = stream.fileName,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            if (stream.isEncrypted) {
-                                Icon(
-                                    Icons.Default.Lock,
-                                    contentDescription = "Cifrato AES-256-GCM",
-                                    tint = colorScheme.tertiary,
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clickable { onOpenEncryptionDialog() }
-                                )
-                            }
-                        }
                         Text(
-                            text = "ID ${stream.sessionId} · ${stream.originalBytes.size} B → ${stream.compressedBytes.size} B" +
-                                if (stream.isEncrypted) " (AES-256)" else " (GZIP)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.onSurfaceVariant,
+                            text = stream.fileName,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
+                        if (stream.isEncrypted) {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = "Cifrato AES-256-GCM",
+                                tint = colorScheme.tertiary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clickable { onOpenEncryptionDialog() }
+                            )
+                        }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .background(statusAccent, RoundedCornerShape(50))
-                        )
-                        Text(
-                            text = if (isParity) {
-                                "FEC ${currentPacket.displayNumber}"
-                            } else {
-                                "PKT ${currentPacket.displayNumber}/${stream.dataPackets.size}"
-                            },
-                            style = MaterialTheme.typography.labelMedium,
-                            color = statusAccent,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
+                    Text(
+                        text = if (isParity) {
+                            "FEC ${currentPacket.displayNumber}"
+                        } else {
+                            "${currentPacket.displayNumber}/${stream.dataPackets.size}"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        color = statusAccent,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.86f)
+                        .fillMaxWidth(0.84f)
                         .aspectRatio(1f)
                         .align(Alignment.CenterHorizontally)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color.White)
-                        .border(1.dp, Color(0xFFD4D4D8), RoundedCornerShape(12.dp))
+                        .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
                         .padding(14.dp)
                         .testTag("dynamic_qr_image_box"),
                     contentAlignment = Alignment.Center
@@ -1470,20 +1453,6 @@ private fun OpticalStagePanel(
                         filterQuality = FilterQuality.None,
                         modifier = Modifier.fillMaxSize()
                     )
-
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val tick = 8.dp.toPx()
-                        val stroke = 1.2.dp.toPx()
-                        val markColor = Color(0xFF18181B).copy(alpha = 0.35f)
-                        drawLine(markColor, Offset(0f, 0f), Offset(tick, 0f), stroke)
-                        drawLine(markColor, Offset(0f, 0f), Offset(0f, tick), stroke)
-                        drawLine(markColor, Offset(size.width - tick, 0f), Offset(size.width, 0f), stroke)
-                        drawLine(markColor, Offset(size.width, 0f), Offset(size.width, tick), stroke)
-                        drawLine(markColor, Offset(0f, size.height - tick), Offset(0f, size.height), stroke)
-                        drawLine(markColor, Offset(0f, size.height), Offset(tick, size.height), stroke)
-                        drawLine(markColor, Offset(size.width - tick, size.height), Offset(size.width, size.height), stroke)
-                        drawLine(markColor, Offset(size.width, size.height - tick), Offset(size.width, size.height), stroke)
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1492,9 +1461,10 @@ private fun OpticalStagePanel(
                     progress = { smoothProgress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(4.dp),
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50)),
                     color = statusAccent,
-                    trackColor = colorScheme.surfaceVariant
+                    trackColor = colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -1505,113 +1475,107 @@ private fun OpticalStagePanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "FRAME %02d/%02d · %.1f KB/s · Ciclo %.1fs".format(
+                        text = "%02d/%02d · %.1f KB/s".format(
                             Locale.US,
                             safeIndex + 1,
                             cachedImageBitmaps.size,
-                            senderState.theoreticalThroughputKbps,
-                            senderState.estimatedCycleSeconds
+                            senderState.theoreticalThroughputKbps
                         ),
                         style = MaterialTheme.typography.labelSmall,
+                        fontFamily = JetBrainsMonoFontFamily,
                         color = colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${senderState.fps} FPS · 120Hz",
+                        text = "${senderState.fps} FPS",
                         style = MaterialTheme.typography.labelSmall,
-                        color = colorScheme.onSurface,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        color = colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         softWrap = false
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = colorScheme.outlineVariant)
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Column(
+                // Essential 3-button transport row
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    IconButton(
+                        onClick = {
+                            haptics.selectionTick()
+                            onStepFrame(-1)
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .testTag("prev_qr_frame_button")
                     ) {
-                        IconButton(
-                            onClick = {
-                                haptics.selectionTick()
-                                onStepFrame(-1)
-                            },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
-                                .testTag("prev_qr_frame_button")
-                        ) {
-                            Icon(
-                                Icons.Default.SkipPrevious,
-                                contentDescription = "Frame precedente",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        InstrumentActionButton(
-                            label = if (senderState.isPlaying) "Pausa Flusso" else "Avvia Flusso",
-                            icon = if (senderState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            onClick = {
-                                haptics.toggle(!senderState.isPlaying)
-                                onTogglePlayPause()
-                            },
-                            isPrimary = true,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("play_pause_qr_button")
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "Frame precedente",
+                            modifier = Modifier.size(18.dp)
                         )
-
-                        IconButton(
-                            onClick = {
-                                haptics.selectionTick()
-                                onStepFrame(1)
-                            },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .border(1.dp, colorScheme.outlineVariant, MaterialTheme.shapes.small)
-                                .testTag("next_qr_frame_button")
-                        ) {
-                            Icon(
-                                Icons.Default.SkipNext,
-                                contentDescription = "Frame successivo",
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        InstrumentActionButton(
-                            label = "Scansiona NACK",
-                            icon = Icons.Default.QrCodeScanner,
-                            onClick = onOpenNackScanner,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("scan_nack_from_sender_button")
-                        )
+                    InstrumentActionButton(
+                        label = if (senderState.isPlaying) "Pausa" else "Avvia",
+                        icon = if (senderState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        onClick = {
+                            haptics.toggle(!senderState.isPlaying)
+                            onTogglePlayPause()
+                        },
+                        isPrimary = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("play_pause_qr_button")
+                    )
 
-                        InstrumentActionButton(
-                            label = "Test Loopback",
-                            icon = Icons.Default.VerifiedUser,
-                            onClick = onNavigateToReceiveLoopback,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("run_loopback_from_sender_button")
+                    IconButton(
+                        onClick = {
+                            haptics.selectionTick()
+                            onStepFrame(1)
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .testTag("next_qr_frame_button")
+                    ) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "Frame successivo",
+                            modifier = Modifier.size(18.dp)
                         )
+                    }
+                }
+
+                // Quiet secondary actions row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    TextButton(
+                        onClick = onOpenNackScanner,
+                        modifier = Modifier.testTag("scan_nack_from_sender_button")
+                    ) {
+                        Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Scansiona NACK", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    TextButton(
+                        onClick = onNavigateToReceiveLoopback,
+                        modifier = Modifier.testTag("run_loopback_from_sender_button")
+                    ) {
+                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Test loopback", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
@@ -1634,305 +1598,304 @@ private fun InspectorTabbedPanel(
     val context = LocalContext.current
     val colorScheme = MaterialTheme.colorScheme
     val haptics = rememberOptiShareHaptics()
+    var expanded by rememberSaveable { mutableStateOf(false) }
     var activeTab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("Telemetria", "Calibrazione", "Filtro NACK")
+    val tabs = listOf("Dettagli", "Velocità & QR", "NACK")
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SegmentedSelectorBar(
-                items = tabs.indices.toList(),
-                selectedItem = activeTab,
-                onItemSelected = { activeTab = it },
-                labelProvider = { idx ->
-                    if (idx == 2 && senderState.selectedMissingDataIndices.isNotEmpty()) {
-                        "NACK (${senderState.selectedMissingDataIndices.size})"
-                    } else {
-                        tabs[idx]
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptics.selectionTick()
+                        expanded = !expanded
                     }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Opzioni flusso",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "${senderState.fps} FPS · ${senderState.chunkSize} B · ECC ${senderState.eccLevel.name}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
                 }
-            )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Comprimi opzioni" else "Espandi opzioni",
+                    tint = colorScheme.onSurfaceVariant
+                )
+            }
 
-            when (activeTab) {
-                0 -> {
-                    val ratio = if (stream.originalBytes.isNotEmpty()) {
-                        val pct = (stream.compressedBytes.size.toFloat() / stream.originalBytes.size.toFloat()) * 100f
-                        "%.0f%%".format(pct)
-                    } else "100%"
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TelemetryMetricCell(
-                            label = "Dimensione Originale",
-                            value = "${stream.originalBytes.size} B",
-                            modifier = Modifier.weight(1f)
-                        )
-                        TelemetryMetricCell(
-                            label = if (stream.isEncrypted) "GZIP + AES-256" else "Compresso GZIP",
-                            value = "${stream.compressedBytes.size} B ($ratio)",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TelemetryMetricCell(
-                            label = "Throughput Ottico",
-                            value = String.format(Locale.US, "%.1f KB/s", senderState.theoreticalThroughputKbps),
-                            valueColor = colorScheme.tertiary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TelemetryMetricCell(
-                            label = "Codifica Multi-Core",
-                            value = "${senderState.encodingDurationMs} ms (${stream.allOrderedPackets.size} QR)",
-                            valueColor = colorScheme.primary,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    HorizontalDivider(color = colorScheme.outlineVariant)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Impronta SHA-256",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = stream.fileSha256,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = JetBrainsMonoFontFamily,
-                                color = colorScheme.tertiary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                haptics.confirmSuccess()
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                                clipboard?.setPrimaryClip(ClipData.newPlainText("SHA-256", stream.fileSha256))
-                                Toast.makeText(context, "SHA-256 copiato", Toast.LENGTH_SHORT).show()
+                    SegmentedSelectorBar(
+                        items = tabs.indices.toList(),
+                        selectedItem = activeTab,
+                        onItemSelected = { activeTab = it },
+                        labelProvider = { idx ->
+                            if (idx == 2 && senderState.selectedMissingDataIndices.isNotEmpty()) {
+                                "NACK (${senderState.selectedMissingDataIndices.size})"
+                            } else {
+                                tabs[idx]
                             }
-                        ) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = "Copia SHA-256",
-                                modifier = Modifier.size(16.dp)
-                            )
                         }
-                    }
-                }
+                    )
 
-                1 -> {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Velocità flusso (120Hz VSync)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
-                            )
-                            Text(
-                                text = "${senderState.fps} FPS (${1000 / senderState.fps.coerceAtLeast(1)} ms)",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colorScheme.primary,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        Slider(
-                            value = senderState.fps.toFloat(),
-                            onValueChange = { onFpsChange(it.toInt()) },
-                            valueRange = 1f..24f,
-                            steps = 22,
-                            modifier = Modifier.testTag("fps_slider")
-                        )
-                        SegmentedSelectorBar(
-                            items = listOf(6, 12, 20, 24),
-                            selectedItem = senderState.fps,
-                            onItemSelected = { onFpsChange(it) },
-                            labelProvider = { "$it FPS" }
-                        )
-                    }
+                    when (activeTab) {
+                        0 -> {
+                            val ratio = if (stream.originalBytes.isNotEmpty()) {
+                                val pct = (stream.compressedBytes.size.toFloat() / stream.originalBytes.size.toFloat()) * 100f
+                                "%.0f%%".format(pct)
+                            } else "100%"
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.BrightnessHigh,
-                                contentDescription = null,
-                                tint = colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "Luminosità Massima Automatica",
-                                    style = MaterialTheme.typography.bodyMedium
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TelemetryMetricCell(
+                                    label = "Originale",
+                                    value = "${stream.originalBytes.size} B",
+                                    modifier = Modifier.weight(1f)
                                 )
-                                Text(
-                                    text = "Imposta il display al 100% durante l'invio QR",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colorScheme.onSurfaceVariant
+                                TelemetryMetricCell(
+                                    label = if (stream.isEncrypted) "GZIP + AES" else "GZIP",
+                                    value = "${stream.compressedBytes.size} B ($ratio)",
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
-                        }
-                        Switch(
-                            checked = senderState.autoMaxBrightness,
-                            onCheckedChange = {
-                                haptics.toggle(!senderState.autoMaxBrightness)
-                                onToggleAutoMaxBrightness()
-                            },
-                            modifier = Modifier.testTag("switch_auto_max_brightness")
-                        )
-                    }
 
-                    Text(
-                        text = "Densità payload per ciascun QR",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    SegmentedSelectorBar(
-                        items = listOf(240, 380, 550),
-                        selectedItem = senderState.chunkSize,
-                        onItemSelected = { size -> onUpdateConfig(size, null) },
-                        labelProvider = { size ->
-                            when (size) {
-                                240 -> "240 B (Nitido)"
-                                380 -> "380 B (Std)"
-                                else -> "550 B (Denso)"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                TelemetryMetricCell(
+                                    label = "Velocità",
+                                    value = String.format(Locale.US, "%.1f KB/s", senderState.theoreticalThroughputKbps),
+                                    valueColor = colorScheme.tertiary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TelemetryMetricCell(
+                                    label = "Codifica",
+                                    value = "${senderState.encodingDurationMs} ms (${stream.allOrderedPackets.size} QR)",
+                                    valueColor = colorScheme.primary,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
-                        }
-                    )
 
-                    Text(
-                        text = "Correzione errori Reed-Solomon (ECC)",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    SegmentedSelectorBar(
-                        items = QrEccLevel.entries,
-                        selectedItem = senderState.eccLevel,
-                        onItemSelected = { ecc -> onUpdateConfig(null, ecc) },
-                        labelProvider = { it.label }
-                    )
-                }
-
-                2 -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Scansiona il QR NACK del ricevitore o tocca i pacchetti da ritrasmettere:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                        FilledTonalButton(
-                            onClick = {
-                                haptics.selectionTick()
-                                onOpenNackScanner()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Scansiona QR NACK dal Ricevitore",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-
-                    if (senderState.selectedMissingDataIndices.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Filtro attivo: ${senderState.selectedMissingDataIndices.size}/${stream.dataPackets.size} PKT",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 8.dp)
-                            )
-                            TextButton(
-                                onClick = {
-                                    haptics.toggle(false)
-                                    onClearMissingChunkFilter()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "SHA-256",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = stream.fileSha256,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = JetBrainsMonoFontFamily,
+                                        color = colorScheme.tertiary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
-                            ) {
-                                Text(
-                                    text = "Ripristina Tutti",
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                                IconButton(
+                                    onClick = {
+                                        haptics.confirmSuccess()
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                        clipboard?.setPrimaryClip(ClipData.newPlainText("SHA-256", stream.fileSha256))
+                                        Toast.makeText(context, "SHA-256 copiato", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.ContentCopy,
+                                        contentDescription = "Copia SHA-256",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        for (i in 0 until stream.dataPackets.size) {
-                            val isSelected = senderState.selectedMissingDataIndices.contains(i)
-                            Box(
-                                modifier = Modifier
-                                    .size(width = 52.dp, height = 36.dp)
-                                    .clip(MaterialTheme.shapes.small)
-                                    .background(
-                                        if (isSelected) colorScheme.secondaryContainer
-                                        else colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        1 -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Velocità flusso",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant,
-                                        shape = MaterialTheme.shapes.small
+                                    Text(
+                                        text = "${senderState.fps} FPS",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.primary
                                     )
-                                    .clickable {
-                                        haptics.selectionTick()
-                                        onToggleMissingChunkFilter(i)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "D#${i + 1}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = if (isSelected) colorScheme.onSecondaryContainer else colorScheme.onSurface
+                                }
+                                Slider(
+                                    value = senderState.fps.toFloat(),
+                                    onValueChange = { onFpsChange(it.toInt()) },
+                                    valueRange = 1f..24f,
+                                    steps = 22,
+                                    modifier = Modifier.testTag("fps_slider")
                                 )
+                                SegmentedSelectorBar(
+                                    items = listOf(6, 12, 20, 24),
+                                    selectedItem = senderState.fps,
+                                    onItemSelected = { onFpsChange(it) },
+                                    labelProvider = { "$it FPS" }
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.BrightnessHigh,
+                                        contentDescription = null,
+                                        tint = colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Luminosità max durante l'invio",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                Switch(
+                                    checked = senderState.autoMaxBrightness,
+                                    onCheckedChange = {
+                                        haptics.toggle(!senderState.autoMaxBrightness)
+                                        onToggleAutoMaxBrightness()
+                                    },
+                                    modifier = Modifier.testTag("switch_auto_max_brightness")
+                                )
+                            }
+
+                            Text(
+                                text = "Densità payload",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            SegmentedSelectorBar(
+                                items = listOf(240, 380, 550),
+                                selectedItem = senderState.chunkSize,
+                                onItemSelected = { size -> onUpdateConfig(size, null) },
+                                labelProvider = { size ->
+                                    when (size) {
+                                        240 -> "240 B"
+                                        380 -> "380 B"
+                                        else -> "550 B"
+                                    }
+                                }
+                            )
+
+                            Text(
+                                text = "Correzione errori (ECC)",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            SegmentedSelectorBar(
+                                items = QrEccLevel.entries,
+                                selectedItem = senderState.eccLevel,
+                                onItemSelected = { ecc -> onUpdateConfig(null, ecc) },
+                                labelProvider = { it.label }
+                            )
+                        }
+
+                        2 -> {
+                            FilledTonalButton(
+                                onClick = {
+                                    haptics.selectionTick()
+                                    onOpenNackScanner()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Scansiona QR NACK")
+                            }
+
+                            if (senderState.selectedMissingDataIndices.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Filtro: ${senderState.selectedMissingDataIndices.size}/${stream.dataPackets.size} PKT",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorScheme.primary
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            haptics.toggle(false)
+                                            onClearMissingChunkFilter()
+                                        }
+                                    ) {
+                                        Text("Ripristina")
+                                    }
+                                }
+                            }
+
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                for (i in 0 until stream.dataPackets.size) {
+                                    val isSelected = senderState.selectedMissingDataIndices.contains(i)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 52.dp, height = 36.dp)
+                                            .clip(MaterialTheme.shapes.small)
+                                            .background(
+                                                if (isSelected) colorScheme.secondaryContainer
+                                                else colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isSelected) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                                shape = MaterialTheme.shapes.small
+                                            )
+                                            .clickable {
+                                                haptics.selectionTick()
+                                                onToggleMissingChunkFilter(i)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "D#${i + 1}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isSelected) colorScheme.onSecondaryContainer else colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

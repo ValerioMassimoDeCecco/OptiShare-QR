@@ -248,10 +248,12 @@ fun ReceiveScanScreen(
                             onSubmitPassword = onSubmitDecryptionPassword
                         )
                     }
-                    AssemblyMatrixInstrumentPanel(
-                        receiverState = receiverState,
-                        onGenerateNackQr = onGenerateNackQr
-                    )
+                    if (receiverState.activeSessionId != null) {
+                        AssemblyMatrixInstrumentPanel(
+                            receiverState = receiverState,
+                            onGenerateNackQr = onGenerateNackQr
+                        )
+                    }
                     VerifiedResultInstrumentPanel(
                         receiverState = receiverState,
                         onRetransmitCompletedRecord = onRetransmitCompletedRecord,
@@ -311,10 +313,12 @@ fun ReceiveScanScreen(
                         onOpenVault = onOpenVault
                     )
 
-                    AssemblyMatrixInstrumentPanel(
-                        receiverState = receiverState,
-                        onGenerateNackQr = onGenerateNackQr
-                    )
+                    if (receiverState.activeSessionId != null) {
+                        AssemblyMatrixInstrumentPanel(
+                            receiverState = receiverState,
+                            onGenerateNackQr = onGenerateNackQr
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(100.dp))
                 }
@@ -516,24 +520,18 @@ private fun CameraScannerInstrumentPanel(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Scanner Fotocamera · Zoom & Torcia",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (receiverState.activeSessionId != null) {
-                            "Sessione #${receiverState.activeSessionId} · ${receiverState.fileName}"
-                        } else {
-                            "Inquadra il codice QR per ricevere"
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    text = if (receiverState.activeSessionId != null) {
+                        receiverState.fileName.ifBlank { "Ricezione QR" }
+                    } else {
+                        "Scansiona QR"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
 
                 if (receiverState.activeSessionId != null) {
                     TextButton(
@@ -547,16 +545,16 @@ private fun CameraScannerInstrumentPanel(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (hasCameraPermission) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(250.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .height(270.dp)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFF050608))
-                        .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                        .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
                         .testTag("camera_preview_container")
                 ) {
                     CameraXQrScannerPreview(
@@ -567,12 +565,12 @@ private fun CameraScannerInstrumentPanel(
 
                     val bracketColor = if (isCompleted) colorScheme.tertiary else colorScheme.primary
                     Canvas(modifier = Modifier.fillMaxSize()) {
-                        val boxSize = size.minDimension * 0.68f
+                        val boxSize = size.minDimension * 0.64f
                         val left = (size.width - boxSize) / 2f
                         val top = (size.height - boxSize) / 2f
                         val right = left + boxSize
                         val bottom = top + boxSize
-                        val arm = 22.dp.toPx()
+                        val arm = 20.dp.toPx()
                         val stroke = 2.dp.toPx()
 
                         drawLine(bracketColor, Offset(left, top), Offset(left + arm, top), stroke)
@@ -583,25 +581,9 @@ private fun CameraScannerInstrumentPanel(
                         drawLine(bracketColor, Offset(left, bottom), Offset(left + arm, bottom), stroke)
                         drawLine(bracketColor, Offset(right - arm, bottom), Offset(right, bottom), stroke)
                         drawLine(bracketColor, Offset(right, bottom - arm), Offset(right, bottom), stroke)
-
-                        val cx = size.width / 2f
-                        val cy = size.height / 2f
-                        val cross = 6.dp.toPx()
-                        drawLine(
-                            Color.White.copy(alpha = 0.45f),
-                            Offset(cx - cross, cy),
-                            Offset(cx + cross, cy),
-                            1.dp.toPx()
-                        )
-                        drawLine(
-                            Color.White.copy(alpha = 0.45f),
-                            Offset(cx, cy - cross),
-                            Offset(cx, cy + cross),
-                            1.dp.toPx()
-                        )
                     }
 
-                    // Top Hardware Camera Controls Overlay (Liquid Glass HUD: Torch + 1x / 1.5x / 2x Quick Zoom)
+                    // Minimal Floating Flash + Zoom HUD Pills
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -625,7 +607,7 @@ private fun CameraScannerInstrumentPanel(
                                 modifier = Modifier.size(15.dp)
                             )
                             Text(
-                                text = if (isTorchOn) "Flash ON" else "Flash",
+                                text = if (isTorchOn) "ON" else "Flash",
                                 style = MaterialTheme.typography.labelSmall,
                                 maxLines = 1,
                                 softWrap = false
@@ -659,7 +641,7 @@ private fun CameraScannerInstrumentPanel(
                         }
                     }
 
-                    // Bottom Floating Liquid Glass Telemetry HUD Bar
+                    // Bottom Floating Status Pill
                     LiquidGlassPill(
                         isDarkHud = true,
                         cornerRadius = 11.dp,
@@ -671,8 +653,7 @@ private fun CameraScannerInstrumentPanel(
                             .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = receiverState.lastScannedPacketLabel?.let { "ULTIMO PKT: $it" }
-                                ?: "ALLINEA IL QR NEL MIRINO",
+                            text = receiverState.lastScannedPacketLabel ?: "Inquadra il QR",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                             maxLines = 1,
@@ -681,22 +662,23 @@ private fun CameraScannerInstrumentPanel(
                                 .weight(1f)
                                 .padding(end = 8.dp)
                         )
-                        Text(
-                            text = "${(receiverState.transferProgress * 100).toInt()}% · ${String.format(Locale.US, "%.1f", receiverState.liveSpeedKbps)} KB/s",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = bracketColor,
-                            maxLines = 1,
-                            softWrap = false
-                        )
+                        if (receiverState.activeSessionId != null) {
+                            Text(
+                                text = "${(receiverState.transferProgress * 100).toInt()}% · ${String.format(Locale.US, "%.1f", receiverState.liveSpeedKbps)} KB/s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = bracketColor,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             } else {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colorScheme.surfaceVariant.copy(alpha = 0.45f))
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -714,7 +696,7 @@ private fun CameraScannerInstrumentPanel(
                     )
                     Text(
                         text = stringResource(R.string.camera_permission_rationale),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
@@ -730,29 +712,34 @@ private fun CameraScannerInstrumentPanel(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            InstrumentActionButton(
+                label = "Importa da galleria",
+                icon = Icons.Default.ImageSearch,
+                onClick = onPickImage,
+                isPrimary = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("import_qr_image_button")
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                contentAlignment = Alignment.Center
             ) {
-                InstrumentActionButton(
-                    label = if (receiverState.isLoopbackRunning) "Test in corso..." else "Simula Loopback",
-                    icon = Icons.Default.PlayCircleFilled,
+                TextButton(
                     onClick = onStartLoopback,
                     enabled = !receiverState.isLoopbackRunning,
-                    isPrimary = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("simulate_loopback_button")
-                )
-
-                InstrumentActionButton(
-                    label = "Importa Immagine QR",
-                    icon = Icons.Default.ImageSearch,
-                    onClick = onPickImage,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("import_qr_image_button")
-                )
+                    modifier = Modifier.testTag("simulate_loopback_button")
+                ) {
+                    Icon(Icons.Default.PlayCircleFilled, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = if (receiverState.isLoopbackRunning) "Simulazione in corso…" else "Simula loopback",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
             }
         }
     }
@@ -769,6 +756,7 @@ private fun AssemblyMatrixInstrumentPanel(
         it != ChunkReceptionState.PENDING
     }
     val missing = receiverState.missingDataChunkIndices
+    var showChunkGrid by rememberSaveable { mutableStateOf(false) }
 
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -781,30 +769,25 @@ private fun AssemblyMatrixInstrumentPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "TELEMETRIA ASSEMBLAGGIO PACCHETTI",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    text = receiverState.statusBanner,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = colorScheme.onSurface,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp)
                 )
                 Text(
-                    text = "$acquiredCount / ${receiverState.totalDataChunks} PKT",
+                    text = "$acquiredCount/${receiverState.totalDataChunks}",
                     style = MaterialTheme.typography.labelMedium,
+                    fontFamily = JetBrainsMonoFontFamily,
                     color = colorScheme.primary,
                     maxLines = 1,
                     softWrap = false
                 )
             }
-
-            Text(
-                text = receiverState.statusBanner,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colorScheme.onSurface
-            )
 
             val smoothTransferProgress by animateFloatAsState(
                 targetValue = receiverState.transferProgress,
@@ -819,37 +802,42 @@ private fun AssemblyMatrixInstrumentPanel(
                 progress = { smoothTransferProgress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp),
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(50)),
                 color = if (receiverState.completedResult != null) colorScheme.tertiary else colorScheme.primary,
-                trackColor = colorScheme.surfaceVariant
+                trackColor = colorScheme.surfaceVariant.copy(alpha = 0.6f)
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                TelemetryMetricCell(
-                    label = "Velocità Live",
-                    value = String.format(Locale.US, "%.1f KB/s", receiverState.liveSpeedKbps),
-                    valueColor = colorScheme.primary,
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = String.format(
+                        Locale.US,
+                        "%.1f KB/s · ETA %ds",
+                        receiverState.liveSpeedKbps,
+                        if (receiverState.completedResult != null) 0 else receiverState.estimatedRemainingSeconds
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = JetBrainsMonoFontFamily,
+                    color = colorScheme.onSurfaceVariant
                 )
-                TelemetryMetricCell(
-                    label = "ETA Stimato",
-                    value = if (receiverState.completedResult != null) "0s" else "${receiverState.estimatedRemainingSeconds}s",
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "Riparati XOR",
-                    value = "${receiverState.parityRecoveredCount} (${receiverState.validFramesScanned} OK)",
-                    valueColor = colorScheme.secondary,
-                    modifier = Modifier.weight(1f)
-                )
+                if (receiverState.totalDataChunks > 0) {
+                    TextButton(
+                        onClick = { showChunkGrid = !showChunkGrid },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (showChunkGrid) "Nascondi pacchetti" else "Dettaglio pacchetti",
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
 
-            if (receiverState.totalDataChunks > 0) {
-                HorizontalDivider(color = colorScheme.outlineVariant)
-
+            AnimatedVisibility(visible = showChunkGrid && receiverState.totalDataChunks > 0) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -857,14 +845,9 @@ private fun AssemblyMatrixInstrumentPanel(
                     for (i in 0 until receiverState.totalDataChunks) {
                         val state = receiverState.chunkStates[i] ?: ChunkReceptionState.PENDING
                         val bgColor = when (state) {
-                            ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary.copy(alpha = 0.18f)
-                            ChunkReceptionState.RECOVERED_PARITY -> colorScheme.secondary.copy(alpha = 0.22f)
+                            ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary.copy(alpha = 0.16f)
+                            ChunkReceptionState.RECOVERED_PARITY -> colorScheme.secondary.copy(alpha = 0.18f)
                             ChunkReceptionState.PENDING -> colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                        }
-                        val borderColor = when (state) {
-                            ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary
-                            ChunkReceptionState.RECOVERED_PARITY -> colorScheme.secondary
-                            ChunkReceptionState.PENDING -> colorScheme.outlineVariant
                         }
                         val textColor = when (state) {
                             ChunkReceptionState.RECEIVED_DIRECT -> colorScheme.tertiary
@@ -873,10 +856,9 @@ private fun AssemblyMatrixInstrumentPanel(
                         }
                         Box(
                             modifier = Modifier
-                                .size(width = 48.dp, height = 30.dp)
-                                .clip(MaterialTheme.shapes.extraSmall)
-                                .background(bgColor)
-                                .border(1.dp, borderColor, MaterialTheme.shapes.extraSmall),
+                                .size(width = 46.dp, height = 28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(bgColor),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -889,36 +871,23 @@ private fun AssemblyMatrixInstrumentPanel(
                         }
                     }
                 }
+            }
 
-                if (missing.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "MANCANTI (${missing.size}): ${missing.take(8).joinToString(", ") { "D#${it + 1}" }}" +
-                                if (missing.size > 8) "…" else "",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        FilledTonalButton(
-                            onClick = onGenerateNackQr,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("generate_nack_qr_button")
-                        ) {
-                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Mostra QR Mancanti (NACK)",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
+            if (missing.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = onGenerateNackQr,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("generate_nack_qr_button")
+                ) {
+                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Richiedi ${missing.size} mancanti (NACK)",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -957,18 +926,20 @@ private fun VerifiedResultInstrumentPanel(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
+                                text = "${result.fileName} (${result.rawBytes.size} B)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
                                 text = if (result.wasEncrypted) {
-                                    "DECIFRATO AES-256 & VERIFICATO SHA-256"
+                                    "Decifrato AES-256 · SHA-256 OK"
                                 } else {
-                                    "INTEGRITÀ SHA-256 VERIFICATA"
+                                    "Integrità SHA-256 verificata"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = colorScheme.tertiary
-                            )
-                            Text(
-                                text = "${result.fileName} (${result.rawBytes.size} B)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }

@@ -27,16 +27,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,9 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.OptiShareCard
-import com.example.ui.components.SectionHeaderRow
 import com.example.ui.components.SegmentedSelectorBar
-import com.example.ui.components.TelemetryMetricCell
 import com.example.ui.components.rememberOptiShareHaptics
 import com.example.ui.theme.AccentPalettePreset
 import com.example.ui.theme.AppCustomizationState
@@ -78,7 +77,6 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     activeRefreshRateHz: Int = 120
 ) {
-    val colorScheme = MaterialTheme.colorScheme
     var showResetConfirmation by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
@@ -92,32 +90,21 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = if (isWideLayout) 1140.dp else 640.dp)
+                .widthIn(max = if (isWideLayout) 1040.dp else 580.dp)
                 .align(Alignment.TopCenter),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Live Interactive Preview Card
-            LiveDesignBenchPreviewCard(
-                customization = customization,
-                activeRefreshRateHz = activeRefreshRateHz
-            )
-
             if (isWideLayout) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        DesignEngineSelectorPanel(
-                            customization = customization,
-                            onUpdateCustomization = onUpdateCustomization,
-                            onApplyPreset = onApplyPreset
-                        )
-                        SurfaceCalibrationPanel(
+                        DesignAndThemeCard(
                             customization = customization,
                             onUpdateCustomization = onUpdateCustomization
                         )
@@ -125,40 +112,35 @@ fun SettingsScreen(
 
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        ColorAndLuminancePanel(
+                        DisplayAndTypographyCard(
                             customization = customization,
+                            activeRefreshRateHz = activeRefreshRateHz,
                             onUpdateCustomization = onUpdateCustomization
                         )
-                        TypographyCalibrationPanel(
+                        AdvancedAppearanceAccordion(
                             customization = customization,
-                            onUpdateCustomization = onUpdateCustomization
-                        )
-                        ResetDefaultsPanel(
+                            onUpdateCustomization = onUpdateCustomization,
+                            onApplyPreset = onApplyPreset,
                             onRequestReset = { showResetConfirmation = true }
                         )
                     }
                 }
             } else {
-                DesignEngineSelectorPanel(
+                DesignAndThemeCard(
+                    customization = customization,
+                    onUpdateCustomization = onUpdateCustomization
+                )
+                DisplayAndTypographyCard(
+                    customization = customization,
+                    activeRefreshRateHz = activeRefreshRateHz,
+                    onUpdateCustomization = onUpdateCustomization
+                )
+                AdvancedAppearanceAccordion(
                     customization = customization,
                     onUpdateCustomization = onUpdateCustomization,
-                    onApplyPreset = onApplyPreset
-                )
-                SurfaceCalibrationPanel(
-                    customization = customization,
-                    onUpdateCustomization = onUpdateCustomization
-                )
-                ColorAndLuminancePanel(
-                    customization = customization,
-                    onUpdateCustomization = onUpdateCustomization
-                )
-                TypographyCalibrationPanel(
-                    customization = customization,
-                    onUpdateCustomization = onUpdateCustomization
-                )
-                ResetDefaultsPanel(
+                    onApplyPreset = onApplyPreset,
                     onRequestReset = { showResetConfirmation = true }
                 )
             }
@@ -170,9 +152,9 @@ fun SettingsScreen(
     if (showResetConfirmation) {
         AlertDialog(
             onDismissRequest = { showResetConfirmation = false },
-            title = { Text("Ripristina Calibrazione Visiva") },
+            title = { Text("Ripristina aspetto predefinito") },
             text = {
-                Text("Vuoi ripristinare tutti i parametri di stile, colori, superfici e tipografia ai valori di fabbrica Swiss Instrument?")
+                Text("Vuoi ripristinare stile, colori e tipografia ai valori predefiniti?")
             },
             confirmButton = {
                 Button(
@@ -193,114 +175,11 @@ fun SettingsScreen(
     }
 }
 
-@Composable
-private fun LiveDesignBenchPreviewCard(
-    customization: AppCustomizationState,
-    activeRefreshRateHz: Int = 120
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val isGlass = customization.designStyle == DesignStyle.LIQUID_GLASS
-
-    OptiShareCard(
-        isHighlighted = true,
-        accentTint = colorScheme.primary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("settings_live_preview_card")
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            SectionHeaderRow(
-                overline = if (isGlass) "Stile Liquid Glass" else "Stile Material You (M3)",
-                title = "Anteprima Personalizzazione"
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isGlass) Icons.Default.BlurOn else Icons.Default.Layers,
-                        contentDescription = null,
-                        tint = colorScheme.primary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Column {
-                        Text(
-                            text = customization.designStyle.label,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "${customization.palette.label} • ${customization.themeMode.label} • ${customization.fontChoice.label}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = JetBrainsMonoFontFamily,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TelemetryMetricCell(
-                    label = "RAGGIO CURVATURA",
-                    value = if (isGlass) "${customization.glassCornerRadiusDp} dp" else "${customization.materialCornerRadiusDp} dp",
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "FREQUENZA DISPLAY",
-                    value = "${activeRefreshRateHz} Hz VSync",
-                    valueColor = colorScheme.tertiary,
-                    modifier = Modifier.weight(1f)
-                )
-                TelemetryMetricCell(
-                    label = "SCALA TESTO",
-                    value = "${(customization.fontScale * 100).roundToInt()}%",
-                    valueColor = colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Verified,
-                    contentDescription = null,
-                    tint = colorScheme.tertiary,
-                    modifier = Modifier.size(15.dp)
-                )
-                Text(
-                    text = "SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934c…",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.tertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DesignEngineSelectorPanel(
+private fun DesignAndThemeCard(
     customization: AppCustomizationState,
-    onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit,
-    onApplyPreset: (String) -> Unit
+    onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val haptics = rememberOptiShareHaptics()
@@ -308,11 +187,12 @@ private fun DesignEngineSelectorPanel(
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            SectionHeaderRow(
-                overline = "Tema e superfici",
-                title = "Stile dell'Interfaccia"
+            Text(
+                text = "Aspetto",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
 
             Row(
@@ -326,12 +206,12 @@ private fun DesignEngineSelectorPanel(
                     } else {
                         "style_material_button"
                     }
-                    val shape = RoundedCornerShape(10.dp)
+                    val shape = RoundedCornerShape(12.dp)
 
                     Surface(
                         shape = shape,
                         color = if (selected) {
-                            colorScheme.primary.copy(alpha = 0.14f)
+                            colorScheme.secondaryContainer
                         } else {
                             colorScheme.surfaceVariant.copy(alpha = 0.35f)
                         },
@@ -340,7 +220,7 @@ private fun DesignEngineSelectorPanel(
                             .clip(shape)
                             .border(
                                 width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                color = if (selected) colorScheme.primary else colorScheme.outlineVariant.copy(alpha = 0.45f),
                                 shape = shape
                             )
                             .clickable {
@@ -349,14 +229,14 @@ private fun DesignEngineSelectorPanel(
                             }
                             .testTag(tag)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Icon(
                                     imageVector = if (style == DesignStyle.LIQUID_GLASS) Icons.Default.BlurOn else Icons.Default.Layers,
@@ -364,295 +244,25 @@ private fun DesignEngineSelectorPanel(
                                     tint = if (selected) colorScheme.primary else colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )
-                                if (selected) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = colorScheme.primary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                Text(
+                                    text = if (style == DesignStyle.LIQUID_GLASS) "Liquid Glass" else "Material You",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (selected) colorScheme.onSecondaryContainer else colorScheme.onSurface
+                                )
                             }
-                            Text(
-                                text = style.label,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (selected) colorScheme.primary else colorScheme.onSurface
-                            )
-                            Text(
-                                text = style.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colorScheme.onSurfaceVariant
-                            )
+                            if (selected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
-
-            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
-
-            Text(
-                text = "PROFILI STUDIO PRE-CALIBRATI",
-                style = MaterialTheme.typography.labelSmall,
-                color = colorScheme.onSurfaceVariant
-            )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(
-                    "SWISS_INSTRUMENT" to "Material You (Predefinito)",
-                    "PAPER_EDITORIAL" to "Material Chiaro Salvia",
-                    "SMOKED_ACRYLIC_GLASS" to "Liquid Glass Scuro",
-                    "MONOCHROME_TERMINAL" to "Material Scuro Ardesia"
-                ).forEach { (key, label) ->
-                    FilledTonalButton(
-                        onClick = {
-                            haptics.selectionTick()
-                            onApplyPreset(key)
-                        },
-                        modifier = Modifier.testTag("preset_$key")
-                    ) {
-                        Text(label, style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-
-            HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 12.dp)
-                ) {
-                    Text(
-                        text = "Fluidità Schermo 120Hz (High Refresh Rate)",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Richiede la modalità hardware 120Hz / ProMotion e sincronizza il flusso QR al VSync (8.33 ms)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = customization.preferHighRefreshRate,
-                    onCheckedChange = { enabled ->
-                        haptics.toggle(enabled)
-                        onUpdateCustomization { it.copy(preferHighRefreshRate = enabled) }
-                    },
-                    modifier = Modifier.testTag("switch_high_refresh_rate_120hz")
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SurfaceCalibrationPanel(
-    customization: AppCustomizationState,
-    onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberOptiShareHaptics()
-
-    AnimatedVisibility(visible = customization.designStyle == DesignStyle.LIQUID_GLASS) {
-        OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeaderRow(
-                    overline = "ACRYLIC OPTICS",
-                    title = "Calibrazione Superfici Liquid Glass"
-                )
-
-                SliderSettingRow(
-                    title = "Opacità Acrilico (Frosted Alpha)",
-                    valueText = "${(customization.glassOpacity * 100).roundToInt()}%",
-                    value = customization.glassOpacity,
-                    valueRange = 0.08f..0.75f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(glassOpacity = v) } },
-                    testTag = "slider_glass_opacity"
-                )
-
-                SliderSettingRow(
-                    title = "Incisione Speculare Bordi (Rim Precision)",
-                    valueText = "${(customization.glassSpecularIntensity * 100).roundToInt()}%",
-                    value = customization.glassSpecularIntensity,
-                    valueRange = 0.05f..1.0f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(glassSpecularIntensity = v) } },
-                    testTag = "slider_glass_specular"
-                )
-
-                SliderSettingRow(
-                    title = "Diffusione Cromatica Perimetrale",
-                    valueText = "${(customization.glassRefractionGlow * 100).roundToInt()}%",
-                    value = customization.glassRefractionGlow,
-                    valueRange = 0.0f..1.0f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(glassRefractionGlow = v) } },
-                    testTag = "slider_glass_refraction"
-                )
-
-                SliderSettingRow(
-                    title = "Raggio Curvatura Lente",
-                    valueText = "${customization.glassCornerRadiusDp} dp",
-                    value = customization.glassCornerRadiusDp.toFloat(),
-                    valueRange = 6f..32f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(glassCornerRadiusDp = v.roundToInt()) } },
-                    testTag = "slider_glass_radius"
-                )
-
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Retroilluminazione Radiale Sottile", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Diffusione atmosferica calibrata sotto i pannelli traslucidi",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = customization.glassAmbientOrbsEnabled,
-                        onCheckedChange = { enabled ->
-                            haptics.toggle(enabled)
-                            onUpdateCustomization { it.copy(glassAmbientOrbsEnabled = enabled) }
-                        },
-                        modifier = Modifier.testTag("switch_glass_orbs")
-                    )
-                }
-
-                if (customization.glassAmbientOrbsEnabled) {
-                    SliderSettingRow(
-                        title = "Intensità Diffusione Radiale",
-                        valueText = "${(customization.glassAmbientOrbIntensity * 100).roundToInt()}%",
-                        value = customization.glassAmbientOrbIntensity,
-                        valueRange = 0.1f..1.0f,
-                        onValueChange = { v -> onUpdateCustomization { it.copy(glassAmbientOrbIntensity = v) } },
-                        testTag = "slider_glass_orb_intensity"
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Menisco Speculare Superiore", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Filo di luce superiore da 1dp lungo i contenitori",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = customization.glassInnerHighlightEnabled,
-                        onCheckedChange = { enabled ->
-                            haptics.toggle(enabled)
-                            onUpdateCustomization { it.copy(glassInnerHighlightEnabled = enabled) }
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    AnimatedVisibility(visible = customization.designStyle == DesignStyle.MATERIAL) {
-        OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeaderRow(
-                    overline = "STRUCTURAL M3",
-                    title = "Geometria & Bordi Material Precision"
-                )
-
-                SliderSettingRow(
-                    title = "Raggio Angoli Componenti",
-                    valueText = "${customization.materialCornerRadiusDp} dp",
-                    value = customization.materialCornerRadiusDp.toFloat(),
-                    valueRange = 0f..28f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(materialCornerRadiusDp = v.roundToInt()) } },
-                    testTag = "slider_material_radius"
-                )
-
-                SliderSettingRow(
-                    title = "Spessore Bordo Tecnico (Hairline)",
-                    valueText = String.format(Locale.US, "%.1f dp", customization.materialBorderWidthDp),
-                    value = customization.materialBorderWidthDp,
-                    valueRange = 0f..2.5f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(materialBorderWidthDp = v) } },
-                    testTag = "slider_material_border"
-                )
-
-                SliderSettingRow(
-                    title = "Densità Superficie Pannelli",
-                    valueText = "${(customization.materialSurfaceContrast * 100).roundToInt()}%",
-                    value = customization.materialSurfaceContrast,
-                    valueRange = 0.35f..1.0f,
-                    onValueChange = { v -> onUpdateCustomization { it.copy(materialSurfaceContrast = v) } },
-                    testTag = "slider_material_contrast"
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Elevazione Tonale Material 3", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Applica gerarchia tonale alle superfici principali",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = customization.materialUseTonalElevation,
-                        onCheckedChange = { enabled ->
-                            haptics.toggle(enabled)
-                            onUpdateCustomization { it.copy(materialUseTonalElevation = enabled) }
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ColorAndLuminancePanel(
-    customization: AppCustomizationState,
-    onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val haptics = rememberOptiShareHaptics()
-
-    OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SectionHeaderRow(
-                overline = "MODALITÀ: ${customization.themeMode.label.uppercase()}",
-                title = "Luminanza & Sistema Cromatico"
-            )
 
             SegmentedSelectorBar(
                 items = ThemeModeOption.entries,
@@ -669,14 +279,10 @@ private fun ColorAndLuminancePanel(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Colori Dinamici di Sistema (Android 12+)", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Sincronizza gli accenti con la palette del sistema operativo",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "Colori dinamici di sistema",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                     Switch(
                         checked = customization.useDynamicColor,
                         onCheckedChange = { enabled ->
@@ -689,21 +295,13 @@ private fun ColorAndLuminancePanel(
             }
 
             if (!customization.useDynamicColor) {
-                HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.45f))
-
-                Text(
-                    text = "ACCENTO STRUMENTALE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colorScheme.onSurfaceVariant
-                )
-
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AccentPalettePreset.entries.forEach { preset ->
                         val selected = customization.palette == preset
-                        val shape = RoundedCornerShape(8.dp)
+                        val shape = RoundedCornerShape(10.dp)
 
                         Surface(
                             shape = shape,
@@ -716,7 +314,7 @@ private fun ColorAndLuminancePanel(
                                 .clip(shape)
                                 .border(
                                     width = if (selected) 1.5.dp else 1.dp,
-                                    color = if (selected) preset.primaryDark else colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                    color = if (selected) preset.primaryDark else colorScheme.outlineVariant.copy(alpha = 0.45f),
                                     shape = shape
                                 )
                                 .clickable {
@@ -726,13 +324,13 @@ private fun ColorAndLuminancePanel(
                                 .testTag("palette_${preset.name}")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(12.dp)
+                                        .size(10.dp)
                                         .clip(CircleShape)
                                         .background(preset.primaryDark)
                                 )
@@ -751,18 +349,23 @@ private fun ColorAndLuminancePanel(
 }
 
 @Composable
-private fun TypographyCalibrationPanel(
+private fun DisplayAndTypographyCard(
     customization: AppCustomizationState,
+    activeRefreshRateHz: Int,
     onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
+
     OptiShareCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionHeaderRow(
-                overline = "FONT OFL • ${customization.fontChoice.name}",
-                title = "Tipografia & Scala Editoriale"
+            Text(
+                text = "Display e carattere",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
 
             SegmentedSelectorBar(
@@ -774,31 +377,182 @@ private fun TypographyCalibrationPanel(
                 labelProvider = { it.label }
             )
 
-            SliderSettingRow(
-                title = "Fattore di Scala Tipografica",
-                valueText = "${(customization.fontScale * 100).roundToInt()}%",
-                value = customization.fontScale,
-                valueRange = 0.85f..1.20f,
-                onValueChange = { v -> onUpdateCustomization { it.copy(fontScale = v) } },
-                testTag = "slider_font_scale"
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Fluidità 120Hz",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Attivo a ${activeRefreshRateHz} Hz",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = customization.preferHighRefreshRate,
+                    onCheckedChange = { enabled ->
+                        haptics.toggle(enabled)
+                        onUpdateCustomization { it.copy(preferHighRefreshRate = enabled) }
+                    },
+                    modifier = Modifier.testTag("switch_high_refresh_rate_120hz")
+                )
+            }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ResetDefaultsPanel(
+private fun AdvancedAppearanceAccordion(
+    customization: AppCustomizationState,
+    onUpdateCustomization: ((AppCustomizationState) -> AppCustomizationState) -> Unit,
+    onApplyPreset: (String) -> Unit,
     onRequestReset: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onRequestReset,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("reset_theme_defaults_button")
-    ) {
-        Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Ripristina Calibrazione Predefinita")
+    val colorScheme = MaterialTheme.colorScheme
+    val haptics = rememberOptiShareHaptics()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    OptiShareCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptics.selectionTick()
+                        expanded = !expanded
+                    }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Regolazioni avanzate",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Comprimi regolazioni" else "Espandi regolazioni",
+                    tint = colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HorizontalDivider(color = colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                    Text(
+                        text = "Profili rapidi",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colorScheme.onSurfaceVariant
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "SWISS_INSTRUMENT" to "Material You",
+                            "PAPER_EDITORIAL" to "Chiaro Salvia",
+                            "SMOKED_ACRYLIC_GLASS" to "Glass Scuro",
+                            "MONOCHROME_TERMINAL" to "Ardesia"
+                        ).forEach { (key, label) ->
+                            FilledTonalButton(
+                                onClick = {
+                                    haptics.selectionTick()
+                                    onApplyPreset(key)
+                                },
+                                modifier = Modifier.testTag("preset_$key")
+                            ) {
+                                Text(label, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    if (customization.designStyle == DesignStyle.LIQUID_GLASS) {
+                        SliderSettingRow(
+                            title = "Traslucenza barre",
+                            valueText = "${(customization.glassOpacity * 100).roundToInt()}%",
+                            value = customization.glassOpacity,
+                            valueRange = 0.68f..0.95f,
+                            onValueChange = { v -> onUpdateCustomization { it.copy(glassOpacity = v) } },
+                            testTag = "slider_glass_opacity"
+                        )
+                        SliderSettingRow(
+                            title = "Riflesso bordi",
+                            valueText = "${(customization.glassSpecularIntensity * 100).roundToInt()}%",
+                            value = customization.glassSpecularIntensity,
+                            valueRange = 0.05f..1.0f,
+                            onValueChange = { v -> onUpdateCustomization { it.copy(glassSpecularIntensity = v) } },
+                            testTag = "slider_glass_specular"
+                        )
+                        SliderSettingRow(
+                            title = "Raggio angoli",
+                            valueText = "${customization.glassCornerRadiusDp} dp",
+                            value = customization.glassCornerRadiusDp.toFloat(),
+                            valueRange = 8f..24f,
+                            onValueChange = { v -> onUpdateCustomization { it.copy(glassCornerRadiusDp = v.roundToInt()) } },
+                            testTag = "slider_glass_radius"
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Bagliore radiale sottile", style = MaterialTheme.typography.bodyMedium)
+                            Switch(
+                                checked = customization.glassAmbientOrbsEnabled,
+                                onCheckedChange = { enabled ->
+                                    haptics.toggle(enabled)
+                                    onUpdateCustomization { it.copy(glassAmbientOrbsEnabled = enabled) }
+                                },
+                                modifier = Modifier.testTag("switch_glass_orbs")
+                            )
+                        }
+                    } else {
+                        SliderSettingRow(
+                            title = "Raggio angoli",
+                            valueText = "${customization.materialCornerRadiusDp} dp",
+                            value = customization.materialCornerRadiusDp.toFloat(),
+                            valueRange = 4f..24f,
+                            onValueChange = { v -> onUpdateCustomization { it.copy(materialCornerRadiusDp = v.roundToInt()) } },
+                            testTag = "slider_material_radius"
+                        )
+                    }
+
+                    SliderSettingRow(
+                        title = "Scala testo",
+                        valueText = "${(customization.fontScale * 100).roundToInt()}%",
+                        value = customization.fontScale,
+                        valueRange = 0.85f..1.20f,
+                        onValueChange = { v -> onUpdateCustomization { it.copy(fontScale = v) } },
+                        testTag = "slider_font_scale"
+                    )
+
+                    TextButton(
+                        onClick = onRequestReset,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("reset_theme_defaults_button")
+                    ) {
+                        Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ripristina predefiniti")
+                    }
+                }
+            }
+        }
     }
 }
 

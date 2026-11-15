@@ -143,90 +143,64 @@ fun VaultScreen(
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Top Telemetry Ledger Bar
-            OptiShareCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    SectionHeaderRow(
-                        overline = "Archivio sul dispositivo · ${records.size} file",
-                        title = "File Condivisi e Ricevuti"
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TelemetryMetricCell(
-                            label = "VOLUME DATI",
-                            value = formatByteCount(totalBytes),
-                            modifier = Modifier.weight(1f)
+            // Clean Search & Direction Filter
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            "Cerca file o SHA-256…",
+                            style = MaterialTheme.typography.bodySmall
                         )
-                        TelemetryMetricCell(
-                            label = "RICEVUTI (RX)",
-                            value = "$receivedCount file",
-                            valueColor = colorScheme.tertiary,
-                            modifier = Modifier.weight(1f)
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
                         )
-                        TelemetryMetricCell(
-                            label = "INVIATI (TX)",
-                            value = "$sentCount file",
-                            valueColor = colorScheme.primary,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = {
-                                Text(
-                                    "Filtra per nome file, MIME o hash SHA-256…",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            },
-                            leadingIcon = {
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
                                 Icon(
-                                    Icons.Default.Search,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
+                                    Icons.Default.Clear,
+                                    contentDescription = "Cancella ricerca",
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(
-                                            Icons.Default.Clear,
-                                            contentDescription = "Cancella ricerca",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("vault_search_input")
-                        )
-                    }
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("vault_search_input")
+                )
 
-                    val filterOptions = listOf(
-                        "ALL" to "Tutti (${records.size})",
-                        "RECEIVED" to "Ricevuti ($receivedCount)",
-                        "SENT" to "Inviati ($sentCount)"
-                    )
-                    SegmentedSelectorBar(
-                        items = filterOptions,
-                        selectedItem = filterOptions.firstOrNull { it.first == selectedFilter } ?: filterOptions.first(),
-                        onItemSelected = { selectedFilter = it.first },
-                        labelProvider = { it.second }
+                val filterOptions = listOf(
+                    "ALL" to "Tutti (${records.size})",
+                    "RECEIVED" to "Ricevuti ($receivedCount)",
+                    "SENT" to "Inviati ($sentCount)"
+                )
+                SegmentedSelectorBar(
+                    items = filterOptions,
+                    selectedItem = filterOptions.firstOrNull { it.first == selectedFilter } ?: filterOptions.first(),
+                    onItemSelected = { selectedFilter = it.first },
+                    labelProvider = { it.second }
+                )
+
+                if (records.isNotEmpty()) {
+                    Text(
+                        text = "${records.size} file · ${formatByteCount(totalBytes)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     )
                 }
             }
@@ -529,7 +503,8 @@ private fun VaultExpandableRecordCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -537,158 +512,133 @@ private fun VaultExpandableRecordCard(
                         color = badgeColor.copy(alpha = 0.14f)
                     ) {
                         Text(
-                            text = if (isReceived) "RX • FOTOCAMERA" else "TX • STREAM QR",
+                            text = if (isReceived) "RX" else "TX",
                             style = MaterialTheme.typography.labelSmall,
                             fontFamily = JetBrainsMonoFontFamily,
                             color = badgeColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                         )
                     }
-                    Text(
-                        text = dateFormat.format(Date(record.timestamp)),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = colorScheme.onSurfaceVariant
-                    )
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onOpenRename,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.DriveFileRenameOutline,
-                            contentDescription = "Rinomina file",
-                            modifier = Modifier.size(18.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = record.fileName,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                    IconButton(
-                        onClick = onRequestDelete,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.DeleteOutline,
-                            contentDescription = "Elimina file",
-                            tint = colorScheme.error,
-                            modifier = Modifier.size(18.dp)
+                        Text(
+                            text = "${formatByteCount(record.fileSizeBytes.toLong())} · ${dateFormat.format(Date(record.timestamp))}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = record.fileName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${formatByteCount(record.fileSizeBytes.toLong())} • ${record.totalDataChunks} pacchetti QR • MIME: ${record.mimeType}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.onSurfaceVariant
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                    .clickable(onClick = onCopyDigest)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        Icons.Default.Verified,
-                        contentDescription = null,
-                        tint = colorScheme.tertiary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "SHA-256: ${record.sha256Hash.take(24)}…",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontFamily = JetBrainsMonoFontFamily,
-                        color = colorScheme.tertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Text(
-                    text = if (isDigestCopied) "COPIATO" else "COPIA",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = JetBrainsMonoFontFamily,
-                    color = colorScheme.primary
+                Icon(
+                    Icons.Default.Verified,
+                    contentDescription = "Integrità verificata",
+                    tint = colorScheme.tertiary,
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
             AnimatedVisibility(visible = isExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .clickable(onClick = onCopyDigest)
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "SHA-256: ${record.sha256Hash.take(22)}…",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = JetBrainsMonoFontFamily,
+                            color = colorScheme.tertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = if (isDigestCopied) "Copiato" else "Copia",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colorScheme.primary
+                        )
+                    }
+
                     record.textPreview?.takeIf { it.isNotBlank() }?.let { snippet ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                .border(
-                                    width = 1.dp,
-                                    color = colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(6.dp)
-                                )
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
                                 .padding(10.dp)
                         ) {
                             Text(
-                                text = snippet.take(240),
+                                text = snippet.take(200),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontFamily = JetBrainsMonoFontFamily,
-                                maxLines = 4,
+                                maxLines = 3,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
-                }
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = onRetransmit,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Trasmetti QR",
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = onRetransmit,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Invia QR",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
 
-                FilledTonalButton(
-                    onClick = onShareExternal,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Condividi",
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        FilledTonalButton(
+                            onClick = onShareExternal,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Condividi",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+
+                        IconButton(onClick = onOpenRename) {
+                            Icon(
+                                Icons.Default.DriveFileRenameOutline,
+                                contentDescription = "Rinomina file",
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        IconButton(onClick = onRequestDelete) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Elimina file",
+                                tint = colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

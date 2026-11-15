@@ -1,19 +1,19 @@
 <resources>
     <string name="app_name">OptiShare QR</string>
-    <string name="nav_send">Invia QR</string>
+    <string name="nav_send">Invia</string>
     <string name="nav_receive">Ricevi</string>
     <string name="nav_vault">Archivio</string>
-    <string name="nav_settings">Stile &amp; Tema</string>
-    <string name="hero_title">Trasmissione Ottica FOSS &amp; Air-Gapped</string>
-    <string name="hero_subtitle">100% Offline • Parità XOR • Checksum CRC32 &amp; SHA-256</string>
-    <string name="pick_file_button">Scegli File dal Dispositivo</string>
-    <string name="capture_photo_button">Scatta Foto / Documento</string>
-    <string name="create_text_note_button">Crea Nota / Testo Rapido</string>
-    <string name="load_sample_button">File Demo Pronto</string>
-    <string name="camera_permission_title">Permesso Fotocamera Richiesto</string>
-    <string name="camera_permission_rationale">Per ricevere i file inquadrando i codici QR dinamici è necessario consentire l\'accesso alla fotocamera. Nessun dato lascia mai il dispositivo.</string>
-    <string name="grant_camera_button">Attiva Fotocamera</string>
-    <string name="simulate_loopback_button">Simula Ricezione Ottica (Test Loopback)</string>
-    <string name="vault_empty_title">Nessun trasferimento in archivio</string>
-    <string name="vault_empty_subtitle">I file inviati o ricevuti via fotocamera vengono salvati localmente con verifica crittografica SHA-256.</string>
+    <string name="nav_settings">Aspetto</string>
+    <string name="hero_title">Trasmissione Ottica Offline</string>
+    <string name="hero_subtitle">Offline • Parità XOR • SHA-256</string>
+    <string name="pick_file_button">Scegli file</string>
+    <string name="capture_photo_button">Scatta foto</string>
+    <string name="create_text_note_button">Nuova nota</string>
+    <string name="load_sample_button">Demo</string>
+    <string name="camera_permission_title">Accesso fotocamera</string>
+    <string name="camera_permission_rationale">Consenti l\'uso della fotocamera per leggere i codici QR offline. Nessun dato lascia il dispositivo.</string>
+    <string name="grant_camera_button">Attiva fotocamera</string>
+    <string name="simulate_loopback_button">Simula loopback</string>
+    <string name="vault_empty_title">Archivio vuoto</string>
+    <string name="vault_empty_subtitle">I file inviati e ricevuti appariranno qui con verifica SHA-256.</string>
 </resources>
